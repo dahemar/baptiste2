@@ -1,0 +1,1149 @@
+/* Theatre Works - Complete CSS from React version */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  --nav-height: 80px;
+}
+
+html {
+  scrollbar-gutter: auto;
+}
+
+body {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #080808;
+  color: #ededed;
+  line-height: 1.6;
+  text-transform: lowercase;
+  overflow-y: scroll;
+  overflow-x: hidden;
+}
+
+.App {
+  min-height: 100vh;
+  background-color: #080808;
+}
+
+/* Navegación principal */
+.main-nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  background-color: rgba(10, 10, 10, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  z-index: 2000;
+  height: var(--nav-height);
+  padding: 1.5rem 0;
+  margin: 0;
+  box-sizing: border-box;
+  transition: opacity 500ms ease-in-out;
+}
+
+.nav-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 2rem;
+  display: flex;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+.nav-links {
+  display: flex;
+  gap: 2rem;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+.nav-link {
+  color: #999;
+  text-decoration: none;
+  font-size: 1rem;
+  font-weight: 300;
+  letter-spacing: -0.02em;
+  transition: all 0.3s ease;
+  padding: 0.5rem 1rem;
+  border-radius: 0;
+  position: relative;
+  text-transform: lowercase;
+  margin: 0;
+  box-sizing: border-box;
+}
+
+.nav-link:hover {
+  color: #ffffff;
+  text-transform: lowercase;
+}
+
+.nav-link.active {
+  color: #ffffff;
+}
+
+.nav-link::after {
+  content: none;
+}
+
+/* Desktop vs mobile nav label toggles */
+.nav-link .desktop-label { display: none; }
+.nav-link .mobile-label { display: inline; }
+
+@media (min-width: 768px) {
+  .nav-link .desktop-label { display: inline; }
+  .nav-link .mobile-label { display: none; }
+}
+
+/* Main content */
+.main-content {
+  padding-top: var(--nav-height);
+  min-height: calc(100vh - var(--nav-height));
+  transition: padding-top 500ms ease-in-out;
+}
+
+.theatre-works {
+  min-height: 100vh;
+  background-color: #1a1a1a;
+  color: #e0e0e0;
+  position: relative;
+  overflow: hidden;
+}
+
+.fixed-viewer {
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  background-color: #1a1a1a;
+  overflow: hidden;
+}
+
+.viewer-container {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* When credits panel is hidden, let the video section use full width */
+.viewer-container:not(.credits-visible) .video-section {
+  width: 100%;
+}
+
+/* When credits panel is visible, shrink video section so it doesn't sit under the panel */
+.viewer-container.credits-visible .video-section {
+  width: calc(100% - 20%);
+  padding-right: 2rem; /* keep existing right padding */
+}
+
+/* Also ensure scenes container leaves space on the right so last thumbnail isn't hidden */
+.viewer-container.credits-visible .scenes-container {
+  padding-right: calc(2rem + 20%);
+}
+
+.video-section {
+  position: relative;
+  width: 80vw;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0 2rem;
+  box-sizing: border-box;
+  background-color: #1a1a1a;
+  transition: width 0.3s ease, padding 0.3s ease;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+@media (max-width: 768px) {
+  .video-section {
+    width: 100%;
+    padding: 0;
+  }
+}
+
+.video-section::-webkit-scrollbar {
+  display: none;
+}
+
+.video-section.full-width {
+  width: 100%;
+  padding: 0 2rem;
+}
+
+.page-header {
+  padding: 2rem;
+  text-align: center;
+  background: linear-gradient(180deg, #1a1a1a 0%, #0a0a0a 100%);
+}
+
+.page-header h1 {
+  font-size: 2.5rem;
+  margin-bottom: 0.5rem;
+  color: #e0e0e0;
+  letter-spacing: -0.02em;
+}
+
+.page-header p {
+  color: #999;
+  font-size: 1rem;
+}
+
+/* Scene Grid */
+.scene-grid {
+  overflow: visible;
+  position: relative;
+  height: 100%;
+  width: 100%;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scroll-behavior: smooth;
+}
+
+.scene-grid::-webkit-scrollbar {
+  display: none;
+}
+
+.works-container {
+  overflow-y: auto;
+  overflow-x: hidden;
+  scroll-behavior: smooth;
+  position: relative;
+  width: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  /* remove positive gap; use negative overlap between rows on desktop */
+  gap: 0;
+}
+
+@media (min-width: 769px) {
+  .work-row + .work-row {
+    margin-top: -56px;
+  }
+}
+
+.work-row {
+  overflow: visible;
+  width: 100%;
+  margin-bottom: 0px !important;
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.work-row.visible-work {
+  height: 30%;
+  min-height: 250px;
+  opacity: 1;
+  z-index: 50;
+}
+
+/* Las flechas se posicionan relativas al work-row */
+.hscroll-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(10, 10, 10, 0.4);
+  color: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  width: 48px;
+  height: 48px;
+  cursor: pointer;
+  z-index: 9999;
+  transition: all 0.3s ease;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  pointer-events: auto;
+}
+
+/* Mostrar flechas en hover sobre la fila (ambas direcciones) */
+.work-row:hover .hscroll-btn {
+  display: flex;
+}
+
+.hscroll-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.3);
+  transform: translateY(-50%);
+}
+
+.hscroll-btn:active {
+  transform: translateY(-50%) scale(0.95);
+}
+
+/* ===== SINGLE SOURCE OF TRUTH FOR ARROW POSITIONING ===== */
+/* Left arrow: always 3px from left edge */
+.hscroll-left {
+  left: 3px;
+  z-index: 2000;
+}
+
+/* Right arrow: 8px from right when panel closed */
+.hscroll-right {
+  right: 8px;
+  z-index: 2000;
+}
+
+/* Right arrow: shift left when credits panel is open to avoid overlap */
+.viewer-container.credits-visible .hscroll-right {
+  right: 8px;
+  z-index: 2000;
+}
+
+/* Progressive loading styles */
+.work-row.row-loading {
+  pointer-events: none;
+}
+
+.work-row.row-loaded {
+  pointer-events: auto;
+}
+
+.row-loading-placeholder {
+  width: 100%;
+  min-height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 0;
+}
+
+.loading-skeleton {
+  width: 100%;
+  display: flex;
+  gap: 1.75rem;
+  padding-right: 2rem;
+}
+
+.skeleton-scenes {
+  display: flex;
+  gap: 1.75rem;
+  width: 100%;
+}
+
+.skeleton-scene {
+  width: 360px;
+  height: 225px;
+  flex-shrink: 0;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.05) 0%,
+    rgba(255, 255, 255, 0.1) 50%,
+    rgba(255, 255, 255, 0.05) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-loading 1.5s ease-in-out infinite;
+  border-radius: 8px;
+}
+
+@keyframes skeleton-loading {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.scenes-container {
+  display: flex;
+  gap: 1.75rem;
+  padding: 1rem 0;
+  padding-right: 2rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  position: relative;
+  justify-content: flex-start;
+  scroll-snap-type: x mandatory;
+  scroll-snap-stop: always;
+}
+
+/* Ensure desktop scenes container isn't hidden behind fixed nav */
+@media (min-width: 769px) {
+  .scenes-container {
+    margin-top: calc(var(--nav-height) + 0.5rem);
+  }
+}
+
+.scenes-container::-webkit-scrollbar {
+  display: none;
+}
+
+.hscroll-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  font-size: 18px;
+  cursor: pointer;
+  z-index: 9999;
+  transition: all 0.3s ease;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  pointer-events: auto;
+}
+
+.hscroll-btn.visible {
+  display: none;
+}
+
+.work-row:hover .hscroll-btn.visible {
+  display: flex;
+}
+
+.hscroll-btn:hover {
+  background: rgba(0, 0, 0, 0.9);
+  transform: translateY(-50%) scale(1.1);
+}
+
+.hscroll-btn:active {
+  transform: translateY(-50%) scale(0.95);
+}
+
+.hscroll-left {
+  left: 4px;
+}
+
+.hscroll-right {
+  right: 4px;
+}
+
+.scene-item {
+  position: relative;
+  width: 360px;
+  height: 225px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: filter 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+  scroll-snap-align: start;
+  box-sizing: border-box;
+  border: 3px solid transparent;
+}
+
+/* Estado inicial con blur suave */
+.scene-item.initial-blur video {
+  filter: blur(2px) brightness(0.9);
+}
+
+/* Escenas de la obra actual */
+.work-row.current-work .scene-item:not(.active) video {
+  filter: blur(2px) brightness(0.9);
+}
+
+.work-row.current-work .scene-item.active video {
+  filter: none;
+}
+
+.work-row.current-work .scene-item.hovered:not(.active) video {
+  filter: blur(1px) brightness(1.0);
+}
+
+/* Escenas de las obras no actuales */
+.work-row:not(.current-work) .scene-item video {
+  filter: blur(2px) brightness(0.9);
+}
+
+.work-row:not(.current-work) .scene-item:hover video {
+  filter: blur(1px) brightness(1.0);
+}
+
+.scene-item:hover {
+  filter: brightness(1.15);
+}
+
+.scene-item.active {
+  border-color: #ffffff;
+  filter: brightness(1.25);
+  box-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
+}
+
+.scene-item.hovered {
+  filter: brightness(1.15);
+  box-shadow: 0 4px 20px rgba(255, 255, 255, 0.1);
+}
+
+.scene-item video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: none;
+  -webkit-appearance: none;
+  backface-visibility: hidden;
+  transform: translateZ(0);
+}
+
+.scene-item video::-webkit-media-controls-start-playback-button {
+  display: none !important;
+}
+
+.scene-item video::-webkit-media-controls,
+.scene-item video::-webkit-media-controls-enclosure {
+  display: none !important;
+}
+
+.play-pause-button {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: none !important;
+  color: #ffffff;
+  border: none !important;
+  font-size: 3rem;
+  padding: 0;
+  width: auto;
+  height: auto;
+  display: block;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.3s ease, transform 0.2s ease;
+  z-index: 15;
+  filter: drop-shadow(0 2px 8px rgba(0,0,0,0.5));
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  border-radius: 0;
+  box-shadow: none !important;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.scene-item:hover .play-pause-button {
+  opacity: 1;
+}
+
+.play-pause-button:hover {
+  transform: translate(-50%, -50%) scale(1.1);
+  background: none !important;
+  filter: drop-shadow(0 4px 12px rgba(0,0,0,0.6));
+}
+
+.play-pause-button:focus {
+  outline: none !important;
+  box-shadow: none !important;
+  border: none !important;
+  background: none !important;
+}
+
+/* VideoPlayer styles */
+.video-player-wrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.video-player {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* Mobile fixed player and controls */
+.mobile-fixed-player {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #000;
+  z-index: 1100;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  padding-top: env(safe-area-inset-top);
+  overflow: hidden;
+  height: 100dvh;
+}
+
+/* Back button - direct child of modal, always visible */
+.mobile-fixed-player .back-button {
+  position: absolute;
+  /* moved down 14px from original +8 => +22 */
+  top: calc(env(safe-area-inset-top) + 22px);
+  left: 12px;
+  /* remove grey container/background for a clean overlay */
+  background: transparent;
+  color: #fff;
+  border: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  cursor: pointer;
+  transition: none;
+  opacity: 1;
+  pointer-events: auto;
+  z-index: 2000;
+}
+
+.mobile-fixed-player .back-button:active {
+  /* no active background */
+  background: transparent;
+}
+
+/* Video wrapper */
+.mobile-fixed-player .video-wrapper {
+  position: relative;
+  width: 100%;
+  background: #000;
+  flex-shrink: 0;
+  border-radius: 0;
+  display: block;
+  align-items: stretch;
+  justify-content: center;
+  z-index: 1115;
+}
+
+.mobile-fixed-player .video-wrapper .nav-arrow.show {
+  display: flex;
+}
+
+.mobile-fixed-player .video-wrapper .nav-arrow.left { left: 12px; }
+.mobile-fixed-player .video-wrapper .nav-arrow.right { right: 12px; }
+
+/* Project navigation controls - always visible at bottom */
+.mobile-fixed-player .project-nav-controls {
+  position: absolute;
+  bottom: calc(env(safe-area-inset-bottom) + 1rem);
+  left: 1rem;
+  right: 1rem;
+  display: flex;
+  justify-content: space-between;
+  padding: 0;
+  z-index: 1500;
+  pointer-events: none;
+}
+
+.mobile-fixed-player .project-nav-btn {
+  background: none;
+  color: #ffffff;
+  border: none;
+  padding: 0.25rem 0.25rem;
+  font-size: 0.95rem;
+  line-height: 1;
+  height: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  opacity: 0.85;
+  cursor: pointer;
+  pointer-events: auto;
+  border-radius: 0;
+}
+
+.mobile-fixed-player .project-nav-btn:hover {
+  opacity: 1;
+  text-decoration: underline;
+}
+
+.mobile-fixed-player .project-nav-btn:active {
+  opacity: 1;
+  transform: none;
+}
+
+/* Credits project nav: show on desktop (inside credits panel) and keep mobile-specific override below */
+.credits-panel .credits-project-nav {
+  display: flex;
+  position: absolute;
+  bottom: 1rem;
+  left: 1rem;
+  right: 1rem;
+  justify-content: space-between;
+  gap: 1rem;
+  pointer-events: auto;
+  z-index: 1200;
+}
+
+@media (max-width: 768px) {
+  .mobile-fixed-player .credits-panel {
+    background-color: #2a2a2a;
+  }
+
+  .mobile-fixed-player .credits-panel .credits-project-nav {
+    display: flex;
+  }
+}
+
+/* Ensure credits panel appears under mobile player */
+.mobile .credits-panel {
+  position: relative;
+  width: 100%;
+  box-sizing: border-box;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Ensure first mobile list item is not covered by nav */
+@media (max-width: 768px) {
+  .mobile-list {
+    padding-top: calc(var(--nav-height) + 0.5rem);
+  }
+
+  /* Place scene nav arrows over the video (visible when .show) */
+  .mobile-fixed-player .video-wrapper .nav-arrow.show {
+    display: flex;
+    opacity: 1;
+  }
+
+  /* Edge tap zones for navigation */
+  .mobile-fixed-player .edge-tap-zone {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 30%;
+    background: transparent;
+    border: none;
+    z-index: 1105;
+    cursor: pointer;
+  }
+  
+  .mobile-fixed-player .edge-tap-zone.left { left: 0; }
+  .mobile-fixed-player .edge-tap-zone.right { right: 0; }
+}
+
+.video-loading,
+.video-error {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: white;
+  background: rgba(0, 0, 0, 0.8);
+  padding: 1rem 2rem;
+  border-radius: 8px;
+  font-size: 14px;
+  pointer-events: none;
+}
+
+.video-error {
+  color: #ff6b6b;
+}
+
+/* VideoGrid styles for Astro islands */
+.video-grid-container {
+  width: 100%;
+  height: calc(100vh - 200px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  scroll-behavior: smooth;
+}
+
+.work-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid #333;
+}
+
+.work-title {
+  font-size: 1.8rem;
+  font-weight: 600;
+  color: #fff;
+  margin: 0;
+}
+
+.scene-counter {
+  font-size: 1rem;
+  color: #999;
+  background: #0a0a0a;
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  border: 1px solid #333;
+}
+
+/* Thumbnails row */
+.thumbnails-row {
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  padding-bottom: 0.5rem;
+  scrollbar-width: thin;
+  scrollbar-color: #4A90E2 #1a1a1a;
+}
+
+.thumbnails-row::-webkit-scrollbar {
+  height: 6px;
+}
+
+.thumbnails-row::-webkit-scrollbar-track {
+  background: #1a1a1a;
+  border-radius: 3px;
+}
+
+.thumbnails-row::-webkit-scrollbar-thumb {
+  background: #4A90E2;
+  border-radius: 3px;
+}
+
+.thumbnail-button {
+  flex-shrink: 0;
+  width: 120px;
+  height: 80px;
+  border: 2px solid #333;
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  background: #0a0a0a;
+  transition: all 0.3s ease;
+  padding: 0;
+}
+
+.thumbnail-button:hover {
+  border-color: #4A90E2;
+  transform: translateY(-2px);
+}
+
+.thumbnail-button.active {
+  border-color: #4A90E2;
+  box-shadow: 0 0 12px rgba(74, 144, 226, 0.5);
+}
+
+.thumbnail-button img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.thumbnail-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #666;
+  font-size: 1.5rem;
+  font-weight: bold;
+}
+
+/* Current video */
+.current-video {
+  width: 100%;
+  height: 400px;
+  background: #000;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 2px solid #333;
+}
+
+.video-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #666;
+  font-size: 1.2rem;
+}
+
+/* Mobile layout */
+@media (max-width: 768px) {
+  :root {
+    --nav-height: 60px;
+  }
+
+  .main-nav {
+    padding: 1rem 0;
+  }
+
+  .nav-container {
+    padding: 0 1rem;
+  }
+
+  .nav-links {
+    gap: 1rem;
+  }
+
+  .nav-link {
+    font-size: 0.9rem;
+    padding: 0.4rem 0.8rem;
+  }
+
+  .nav-link:hover {
+    color: #ffffff;
+  }
+
+  .nav-link:hover::after {
+    width: 0;
+  }
+
+  .nav-link.home-link {
+    font-size: 0 !important;
+    white-space: nowrap;
+    position: relative;
+  }
+
+  .nav-link.home-link::before {
+    content: "theatre";
+    font-size: 0.9rem;
+    line-height: 1;
+    display: inline-block;
+  }
+
+  .nav-link.home-link::after {
+    display: none;
+  }
+
+  .main-content {
+    padding-top: var(--nav-height);
+  }
+
+  .scene-grid.mobile {
+    overflow-y: auto;
+    overflow-x: hidden;
+    touch-action: pan-y;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+  }
+
+  .mobile-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 0.5rem 0 1rem;
+    touch-action: pan-y;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+  }
+
+  .mobile-item {
+    position: relative;
+    border-radius: 0;
+    overflow: hidden;
+    background: #000;
+    touch-action: pan-y;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+  }
+
+  .mobile-item .mobile-video-wrapper {
+    width: 100%;
+    touch-action: pan-y;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+  }
+
+  .mobile-item .mobile-video {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 16 / 9;
+    object-fit: cover;
+    display: block;
+    touch-action: pan-y;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+  }
+
+  .mobile-item .mobile-work-title {
+    padding: 0.5rem 0.25rem 0.75rem;
+    font-size: 0.95rem;
+    color: #fff;
+    text-transform: none !important;
+  }
+  /* Lower the very first project by 64px (55 + 9) to add more top margin */
+  .mobile-list > .mobile-item:first-child {
+    margin-top: 64px;
+  }
+
+  .play-pause-button {
+    font-size: 2rem;
+    opacity: 1;
+  }
+
+  /* Ocultar flechas de navegación en móvil */
+  .hscroll-btn {
+    display: none !important;
+  }
+
+  /* Mostrar vídeos laterales diluidos en móvil */
+  .scenes-container {
+    padding: 0 1rem;
+    gap: 0.5rem;
+    scroll-snap-type: x mandatory;
+    scroll-snap-stop: always;
+    padding-left: calc(50vw - 0.5rem);
+    padding-right: calc(50vw - 0.5rem);
+    touch-action: pan-y;
+  }
+
+  .scene-item {
+    width: 100%;
+    min-width: 100%;
+    height: auto;
+    aspect-ratio: 16 / 9;
+    scroll-snap-align: center;
+    box-sizing: border-box;
+    border: none;
+    border-radius: 0;
+  }
+
+  .scene-item.active {
+    opacity: 1;
+    z-index: 10;
+    border-color: #4A90E2;
+  }
+
+  .scene-item:not(.active) {
+    /* Vivid and clear */
+    opacity: 1;
+    filter: brightness(1.0);
+  }
+
+  .viewer-container.player-mode { background: #000; }
+
+  .video-section {
+    width: 100vw;
+    height: 100dvh;
+    padding: 0 2rem;
+    transition: none;
+  }
+  .video-section.hidden-behind { visibility: hidden; pointer-events: none; }
+  .viewer-container.credits-visible .video-section { padding: 0 2rem; }
+
+  .mobile-fixed-player {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 40dvh;
+    width: 100vw;
+    aspect-ratio: 16 / 9;
+    background: #000;
+    z-index: 1100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: -16px;
+  }
+  .mobile-fixed-player .player-header {
+    position: absolute;
+    top: -48px;
+    left: 0;
+    right: 0;
+    height: 56px;
+    display: block;
+  }
+  .mobile-fixed-player video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    margin-top: 80px; /* bajar el vídeo 80px en el modal móvil */
+  }
+  .mobile-fixed-player .nav-arrow {
+    position: absolute;
+    top: calc(50% + 80px);
+    transform: translateY(-50%);
+    border: none;
+    background: none;
+    color: #fff;
+    font-size: 24px;
+    z-index: 1200;
+    opacity: 0;
+    transition: opacity 0.25s ease;
+  }
+  .mobile-fixed-player .nav-arrow.left { left: 12px; }
+  .mobile-fixed-player .nav-arrow.right { right: 12px; }
+  .mobile-fixed-player .nav-arrow.show { opacity: 1; }
+  .mobile-fixed-player:hover .nav-arrow { opacity: 1; }
+
+  .mobile-fixed-player .edge-tap-zone {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 20%;
+    background: transparent;
+    border: none;
+    padding: 0;
+    margin: 0;
+    z-index: 1150;
+  }
+  .mobile-fixed-player .edge-tap-zone.left { left: 0; }
+  .mobile-fixed-player .edge-tap-zone.right { right: 0; }
+
+  body.player-mode-active .mobile-fixed-player { bottom: 48dvh; }
+
+  .work-title {
+    font-size: 1.4rem;
+  }
+
+  .thumbnail-button {
+    width: 80px;
+    height: 60px;
+  }
+
+  .current-video {
+    height: 300px;
+  }
+}
+
+/* Player mode: fade out nav and reclaim space */
+body.player-mode-active .main-nav {
+  opacity: 0;
+  pointer-events: none;
+}
+
+body.player-mode-active .main-content {
+  padding-top: 0;
+  min-height: 100vh;
+}
+
+/* Scrollbar personalizada */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1a1a1a;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 0;
+}
+
+@media (min-width: 1400px) {
+  .current-video {
+    height: 500px;
+  }
+}
