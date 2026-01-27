@@ -1,0 +1,84 @@
+/* Página Audiovisual - coherente con Theatre/Music */
+.av-page {
+  padding: 2rem;
+  max-width: 900px;
+  margin: 0 auto;
+  padding-top: calc(var(--nav-height) + 2rem);
+}
+
+.av-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+/* Item grande apilado */
+.av-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/* Placeholder de imagen/video grande 16:9 */
+.av-media {
+  width: 100%;
+}
+
+.av-placeholder {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02));
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 4px;
+}
+
+/* Metadatos debajo del media */
+.av-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.av-name {
+  font-size: 1.125rem;
+  font-weight: 600;
+  text-transform: none !important;
+}
+
+.av-credits {
+  font-size: 0.95rem;
+  opacity: 0.85;
+  line-height: 1.4;
+  text-transform: none !important;
+}
+
+.av-year {
+  font-size: 0.85rem;
+  opacity: 0.7;
+  text-transform: none !important;
+}
+
+/* Responsivo */
+@media (min-width: 1100px) {
+  .av-page {
+    max-width: 1100px;
+  }
+}
+
+@media (max-width: 768px) {
+  .av-page {
+    padding-top: calc(var(--nav-height) + 1rem);
+  }
+  
+  .av-list {
+    gap: 1.5rem;
+  }
+  
+  .av-item {
+    gap: 0.5rem;
+  }
+
+  .av-placeholder {
+    border-radius: 0;
+  }
+}
