@@ -1,0 +1,285 @@
+[
+  {
+    "id": "1",
+    "title": "Concours de Larmes",
+    "author": "Marvin M'Toumo",
+    "scenes": [
+      {
+        "id": "1-scene-0",
+        "videoUrl": "/assets/videos/Elie Concours 1.mp4",
+        "thumbnail": "/assets/images/thumbnails/Elie Concours 1.jpg"
+      },
+      {
+        "id": "1-scene-1",
+        "videoUrl": "/assets/videos/Elie Concours 2.mp4",
+        "thumbnail": "/assets/images/thumbnails/Elie Concours 2.jpg"
+      },
+      {
+        "id": "1-scene-2",
+        "videoUrl": "/assets/videos/Elie Concours 3.mp4",
+        "thumbnail": "/assets/images/thumbnails/Elie Concours 3.jpg"
+      },
+      {
+        "id": "1-scene-3",
+        "videoUrl": "/assets/videos/Jeremiades 1.mp4",
+        "thumbnail": "/assets/images/thumbnails/Jeremiades 1.jpg"
+      },
+      {
+        "id": "1-scene-4",
+        "videoUrl": "/assets/videos/Jeremiades 2.mp4",
+        "thumbnail": "/assets/images/thumbnails/Jeremiades 2.jpg"
+      },
+      {
+        "id": "1-scene-5",
+        "videoUrl": "/assets/videos/Jeremiades 3.mp4",
+        "thumbnail": "/assets/images/thumbnails/Jeremiades 3.jpg"
+      }
+    ],
+    "credits": [
+      {
+        "role": "Direction",
+        "name": "Marvin M’Toumo"
+      },
+      {
+        "role": "Acting/Performance",
+        "name": "Elie Autins"
+      },
+      {
+        "role": "Light",
+        "name": "Alessandra Domingues"
+      },
+      {
+        "role": "Costumes",
+        "name": "Marie Schaller"
+      },
+      {
+        "role": "Make-up",
+        "name": "Chaïm Vischel"
+      }
+    ]
+  },
+  {
+    "id": "2",
+    "title": "Qui a Peur",
+    "author": "Davide-Christelle Sanvee",
+    "scenes": [
+      {
+        "id": "2-scene-0",
+        "videoUrl": "/assets/videos/1.Lamp 1.mp4",
+        "thumbnail": "/assets/images/thumbnails/1.Lamp 1.jpg"
+      },
+      {
+        "id": "2-scene-1",
+        "videoUrl": "/assets/videos/2.Siffle 1.mp4",
+        "thumbnail": "/assets/images/thumbnails/2.Siffle 1.jpg"
+      },
+      {
+        "id": "2-scene-2",
+        "videoUrl": "/assets/videos/3.Baldwin 1.mp4",
+        "thumbnail": "/assets/images/thumbnails/3.Baldwin 1.jpg"
+      },
+      {
+        "id": "2-scene-3",
+        "videoUrl": "/assets/videos/4.Shepperd 1.mp4",
+        "thumbnail": "/assets/images/thumbnails/4.Shepperd 1.jpg"
+      },
+      {
+        "id": "2-scene-4",
+        "videoUrl": "/assets/videos/5.Hand 1.mp4",
+        "thumbnail": "/assets/images/thumbnails/5.Hand 1.jpg"
+      }
+    ],
+    "credits": [
+      {
+        "role": "Direction",
+        "name": "Davide-Christelle Sanvee"
+      },
+      {
+        "role": "Acting/Performance",
+        "name": "Davide-Christelle Sanvee"
+      },
+      {
+        "role": "Acting/Performance",
+        "name": "Steven Schoch"
+      },
+      {
+        "role": "Video",
+        "name": "Dîlan Kîliç"
+      },
+      {
+        "role": "Light",
+        "name": "Florian Bach"
+      },
+      {
+        "role": "Light",
+        "name": "Luis Henkes"
+      },
+      {
+        "role": "Costumes",
+        "name": "Marie Schaller"
+      },
+      {
+        "role": "Video production",
+        "name": "Raphaël Piguet"
+      }
+    ]
+  },
+  {
+    "id": "3",
+    "title": "new project",
+    "author": "author",
+    "scenes": [
+      {
+        "id": "3-scene-0",
+        "videoUrl": "/assets/videos/1.Grace chien kora.mp4",
+        "thumbnail": "/assets/images/thumbnails/1.Grace chien kora.jpg"
+      },
+      {
+        "id": "3-scene-1",
+        "videoUrl": "/assets/videos/2.Oiseaux noirs.mp4",
+        "thumbnail": "/assets/images/thumbnails/2.Oiseaux noirs.jpg"
+      },
+      {
+        "id": "3-scene-2",
+        "videoUrl": "/assets/videos/3.Le Dodo.mp4",
+        "thumbnail": "/assets/images/thumbnails/3.Le Dodo.jpg"
+      },
+      {
+        "id": "3-scene-3",
+        "videoUrl": "/assets/videos/4.diablesse cacao.mp4",
+        "thumbnail": "/assets/images/thumbnails/4.diablesse cacao.jpg"
+      },
+      {
+        "id": "3-scene-4",
+        "videoUrl": "/assets/videos/5.Vache noire.mp4",
+        "thumbnail": "/assets/images/thumbnails/5.Vache noire.jpg"
+      },
+      {
+        "id": "3-scene-5",
+        "videoUrl": "/assets/videos/6.Elie épée.mp4",
+        "thumbnail": "/assets/images/thumbnails/6.Elie épée.jpg"
+      },
+      {
+        "id": "3-scene-6",
+        "videoUrl": "/assets/videos/7.Oiseaux blancs.mp4",
+        "thumbnail": "/assets/images/thumbnails/7.Oiseaux blancs.jpg"
+      },
+      {
+        "id": "3-scene-7",
+        "videoUrl": "/assets/videos/8.Poursuite DC danse.mp4",
+        "thumbnail": "/assets/images/thumbnails/8.Poursuite DC danse.jpg"
+      },
+      {
+        "id": "3-scene-8",
+        "videoUrl": "/assets/videos/9.Poursuite DC coros.mp4",
+        "thumbnail": "/assets/images/thumbnails/9.Poursuite DC coros.jpg"
+      },
+      {
+        "id": "3-scene-9",
+        "videoUrl": "/assets/videos/10.La Chatte au Soleil.mp4",
+        "thumbnail": "/assets/images/thumbnails/10.La Chatte au Soleil.jpg"
+      },
+      {
+        "id": "3-scene-10",
+        "videoUrl": "/assets/videos/11.Le Coton.mp4",
+        "thumbnail": "/assets/images/thumbnails/11.Le Coton.jpg"
+      }
+    ],
+    "credits": [
+      {
+        "role": "Direction",
+        "name": ""
+      },
+      {
+        "role": "Acting/Performance",
+        "name": ""
+      },
+      {
+        "role": "Light",
+        "name": ""
+      },
+      {
+        "role": "Costumes",
+        "name": ""
+      },
+      {
+        "role": "Make-up",
+        "name": ""
+      }
+    ]
+  },
+  {
+    "id": "4",
+    "title": "Zizi Zozio",
+    "author": "Marvin M'Toumo",
+    "scenes": [
+      {
+        "id": "4-scene-0",
+        "videoUrl": "/assets/videos/1.La Nuit.mp4",
+        "thumbnail": "/assets/images/thumbnails/1.La Nuit.jpg"
+      },
+      {
+        "id": "4-scene-1",
+        "videoUrl": "/assets/videos/2.Gorge rouge.mp4",
+        "thumbnail": "/assets/images/thumbnails/2.Gorge rouge.jpg"
+      },
+      {
+        "id": "4-scene-2",
+        "videoUrl": "/assets/videos/3.Intro Pleurs.mp4",
+        "thumbnail": "/assets/images/thumbnails/3.Intro Pleurs.jpg"
+      },
+      {
+        "id": "4-scene-3",
+        "videoUrl": "/assets/videos/4.End Song.mp4",
+        "thumbnail": "/assets/images/thumbnails/4.End Song.jpg"
+      },
+      {
+        "id": "4-scene-4",
+        "videoUrl": "/assets/videos/5.Toux.mp4",
+        "thumbnail": "/assets/images/thumbnails/5.Toux.jpg"
+      },
+      {
+        "id": "4-scene-5",
+        "videoUrl": "/assets/videos/6.Eteignez tout.mp4",
+        "thumbnail": "/assets/images/thumbnails/6.Eteignez tout.jpg"
+      }
+    ]
+  },
+  {
+    "id": "5",
+    "title": "Dona Lourdès",
+    "author": "Némo Camus & Robson Ledesma",
+    "scenes": [
+      {
+        "id": "5-scene-0",
+        "videoUrl": "/assets/videos/1.Drone Postures.mp4",
+        "thumbnail": "/assets/images/thumbnails/1.Drone Postures.jpg"
+      },
+      {
+        "id": "5-scene-1",
+        "videoUrl": "/assets/videos/2.Organ Vinyl.mp4",
+        "thumbnail": "/assets/images/thumbnails/2.Organ Vinyl.jpg"
+      },
+      {
+        "id": "5-scene-2",
+        "videoUrl": "/assets/videos/3.Loop Felicidad.mp4",
+        "thumbnail": "/assets/images/thumbnails/3.Loop Felicidad.jpg"
+      },
+      {
+        "id": "5-scene-3",
+        "videoUrl": "/assets/videos/4.Piano Theme.mp4",
+        "thumbnail": "/assets/images/thumbnails/4.Piano Theme.jpg"
+      },
+      {
+        "id": "5-scene-4",
+        "videoUrl": "/assets/videos/5.Orfeu Granular.mp4",
+        "thumbnail": "/assets/images/thumbnails/5.Orfeu Granular.jpg"
+      },
+      {
+        "id": "5-scene-5",
+        "videoUrl": "/assets/videos/6.Freeze Cabelo.mp4",
+        "thumbnail": "/assets/images/thumbnails/6.Freeze Cabelo.jpg"
+      }
+    ]
+  }
+]
