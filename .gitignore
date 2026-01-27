@@ -1,0 +1,57 @@
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Production builds
+dist/
+build/
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Exclude original large GIF files
+*.gif
+
+# Exclude large WAV files (keep compressed audio if needed)
+*.wav
+
+# Exclude RTF credit files (we can convert to txt if needed)
+*.rtf
+
+# Exclude video backups and alternative formats (keep main videos)
+public/assets/videos/backup_*/
+public/assets/videos/safari/
+public/assets/videos/webm/
+public/assets/videos/ogv/
+public/assets/videos/safari-*/
+
+# Log files
+*.log
+
+# Temporary files
+*.tmp
+*.temp 
+.vercel
+.env*.local
