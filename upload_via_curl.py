@@ -35,6 +35,15 @@ for dirpath,dirnames,filenames in os.walk(ROOT):
     for fname in filenames:
         fp=os.path.join(dirpath,fname)
         rel=os.path.relpath(fp,ROOT)
+        # skip unwanted directories/artifacts
+        if rel.startswith('astro-app/.git-submodule-backup'):
+            continue
+        if rel.startswith('.video_push_logs'):
+            continue
+        if rel.startswith('astro-app/.astro'):
+            continue
+        if rel.endswith('.DS_Store'):
+            continue
         api_path=quote(rel)
         # get remote sha if exists
         p=gh_get(api_path)
