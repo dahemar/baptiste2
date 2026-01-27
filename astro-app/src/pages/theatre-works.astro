@@ -1,0 +1,56 @@
+---
+import sheetsManager from '../utils/googleSheetsManager';
+import VideoGrid from '../components/VideoGrid';
+
+// Load theatre works data at build time or on-demand
+const works = await sheetsManager.loadTheatreWorksData();
+const totalVideos = works.reduce((sum, work) => sum + work.scenes.length, 0);
+
+// Parse credits from works (simplificado para ahora)
+const currentWork = works.length > 0 ? works[0] : null;
+const credits = currentWork?.credits ? [
+  { role: 'Credits', name: currentWork.credits }
+] : [];
+---
+
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="stylesheet" href="/theatre-works.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Baptiste Le Chapelain</title>
+    <style>
+      @import '../components/CreditsPanel.css';
+      @import '../components/VUMeter.css';
+    </style>
+  </head>
+  <body>
+    <nav class="main-nav">
+      <div class="nav-container">
+        <div class="nav-links">
+          <a href="/theatre-works" class="nav-link home-link active" aria-label="theatre"><span class="desktop-label">music for theatre</span><span class="mobile-label">theatre</span></a>
+          <a href="/music" class="nav-link">music</a>
+          <a href="/audiovisual" class="nav-link">audiovisual</a>
+          <a href="/contact" class="nav-link">contact</a>
+        </div>
+      </div>
+    </nav>
+
+    <div class="theatre-works">
+      <div class="fixed-viewer">
+        <div class="viewer-container">
+          <div class="video-section full-width">
+            {works.length === 0 ? (
+              <div class="loading">
+                <p>No works found</p>
+              </div>
+            ) : (
+              <VideoGrid works={works} client:only="react" />
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
