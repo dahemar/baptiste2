@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Baptiste Le Chapelain</title>
+  </head>
+  <body>
+    <script>
+      // If we're at the site root, fetch the /theatre-works HTML and render it in-place.
+      // This preserves URL '/' while showing the same content as '/theatre-works'.
+      (function(){
+        if (location.pathname === '/' || location.pathname === '') {
+          try {
+            fetch('/theatre-works', { cache: 'no-store' }).then(function(res){
+              if (!res.ok) throw new Error('fetch failed: ' + res.status);
+              return res.text();
+            }).then(function(html){
+              // Replace the current document with the fetched HTML
+              document.open();
+              document.write(html);
+              document.close();
+              // Keep the URL as '/'
+              history.replaceState(null, '', '/');
+            }).catch(function(err){
+              console.error('Failed to load /theatre-works into / :', err);
+            });
+          } catch(e) {
+            console.error('Error loading theatre-works:', e);
+          }
+        }
+      })();
+    </script>
+  </body>
+</html>
