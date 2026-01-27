@@ -1,0 +1,2 @@
+Los archivos multimedia se han removido para reducir el tamaño del repositorio.
+Para agregar los archivos multimedia, sube los archivos .wav, .mp4 y .gif a esta carpeta. 
