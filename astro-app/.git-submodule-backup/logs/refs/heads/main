@@ -1,0 +1,2 @@
+0000000000000000000000000000000000000000 f5eb6954d91115ff11eaa4a3df63be1029e31324 dahemar <davidherreromarti@gmail.com> 1769001419 +0100	commit (initial): Initial commit from Astro
+f5eb6954d91115ff11eaa4a3df63be1029e31324 d701d9a36cb649345ceab5e2f5ddb95139855093 dahemar <davidherreromarti@gmail.com> 1769543516 +0100	commit: chore: ensure astro is devDependency for Vercel builds
