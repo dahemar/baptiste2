@@ -7,10 +7,18 @@ REPO='dahemar/baptiste2'
 
 def gh_get(path):
     cmd=['gh','api',f'/repos/{REPO}/contents/{path}']
-    return subprocess.run(cmd, capture_output=True, text=True)
+    try:
+        return subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+    except subprocess.TimeoutExpired as e:
+        print(f"[ERROR] gh api GET timeout for {path}")
+        return subprocess.CompletedProcess(cmd, returncode=2, stdout='', stderr='timeout')
 
 def get_token():
-    p=subprocess.run(['gh','auth','token'], capture_output=True, text=True)
+    try:
+        p=subprocess.run(['gh','auth','token'], capture_output=True, text=True, timeout=10)
+    except subprocess.TimeoutExpired:
+        print('Could not get gh token: timeout', file=sys.stderr)
+        sys.exit(2)
     if p.returncode!=0:
         print('Could not get gh token', file=sys.stderr)
         sys.exit(2)
@@ -54,7 +62,12 @@ for dirpath,dirnames,filenames in os.walk(ROOT):
             json.dump(payload,t)
         url=f'https://api.github.com/repos/{REPO}/contents/{rel}'
         curl_cmd=['curl','-s','-X','PUT']+HEADERS+['-d',f'@{tmp}',url]
-        q=subprocess.run(curl_cmd, capture_output=True, text=True)
+        try:
+            q=subprocess.run(curl_cmd, capture_output=True, text=True, timeout=120)
+        except subprocess.TimeoutExpired:
+            print('[FAIL]',rel,'curl timeout')
+            errors+=1
+            continue
         if q.returncode==0:
             try:
                 resp=json.loads(q.stdout)
