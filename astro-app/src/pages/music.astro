@@ -1,0 +1,212 @@
+---
+import '../styles/music.css';
+
+const images = import.meta.glob('../assets/music/*.{jpg,jpeg,png,webp}', {
+  eager: true,
+  query: '?url',
+  import: 'default'
+});
+
+const releases = [
+  { 
+    key: 'oo.ne.jpg', 
+    title: 'OO:NÉ', 
+    format: 'cassette (lp)',
+    year: '2017',
+    type: 'album',
+    url: 'https://www.discogs.com/release/10275611-Apulati-Bien-OON%C3%89'
+  },
+  { 
+    key: 'exvivo.jpg', 
+    title: 'Exvivo', 
+    format: 'cassette (lp)',
+    year: '2023',
+    type: 'album',
+    url: 'https://www.discogs.com/release/28599484-Apulati-Bien-Exvivo'
+  },
+  { 
+    key: 'dap.jpg', 
+    title: "D'ap", 
+    format: 'cassette (ep)',
+    year: '2018',
+    type: 'ep',
+    url: 'https://www.discogs.com/fr/artist/5751087-Apulati-Bien?superFilter=Releases'
+  },
+  { 
+    key: 'rertracks.jpg', 
+    title: 'RER TRACKS', 
+    format: 'cassette (ep)',
+    year: '2020',
+    type: 'ep',
+    url: 'https://www.discogs.com/release/16299626-Apulati-Bien-RER-TRACKS'
+  },
+  { 
+    key: 'crapulati.jpg', 
+    title: 'Crapulati 1', 
+    format: 'cassette (ep)',
+    year: '2020',
+    type: 'ep',
+    url: 'https://www.discogs.com/fr/artist/5751087-Apulati-Bien?superFilter=Releases'
+  },
+  { 
+    key: 'azone.jpg', 
+    title: 'Azone', 
+    format: 'vinyl (green, lp)',
+    year: '2022',
+    type: 'album',
+    url: 'https://www.discogs.com/release/22154026-Apulati-Bien-Azone'
+  },
+  { 
+    key: 'nonmasse.jpg', 
+    title: 'Non Masse', 
+    format: 'vinyl (lp)',
+    year: '2023',
+    type: 'album',
+    url: 'https://www.discogs.com/release/26407793-Apulati-Bien-Non-Masse'
+  },
+  { 
+    key: 'ultimate.jpg', 
+    title: 'Ultimate Best Of Live', 
+    format: 'cassette (compilation)',
+    year: '2021',
+    type: 'compilation',
+    url: 'https://www.discogs.com/release/21105961-Apulati-Bien-Ultimate-Best-Of-Live'
+  }
+];
+
+const normalizeKey = (path: string) => {
+  return path.split('/').pop() || '';
+};
+
+const entries = Object.entries(images).map(([path, src]) => {
+  const key = normalizeKey(path);
+  const found = releases.find(r => r.key === key);
+  return {
+    key,
+    src: typeof src === 'string' ? src : '',
+    title: found?.title || key.replace(/\.(jpg|jpeg|png|webp)$/i, ''),
+    format: found?.format || '',
+    year: found?.year || '',
+    type: found?.type || 'other',
+    url: found?.url || 'https://www.discogs.com/fr/artist/5751087-Apulati-Bien?superFilter=Releases'
+  };
+});
+
+const albums = entries.filter(item => item.type === 'album').sort((a, b) => Number(a.year) - Number(b.year));
+const eps = entries.filter(item => item.type === 'ep').sort((a, b) => Number(a.year) - Number(b.year));
+const compilations = entries.filter(item => item.type === 'compilation').sort((a, b) => Number(a.year) - Number(b.year));
+---
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Baptiste Le Chapelain</title>
+  <link rel="stylesheet" href="/theatre-works.css">
+</head>
+<body>
+  <nav class="main-nav">
+    <div class="nav-container">
+      <div class="nav-links">
+        <a href="/theatre-works" class="nav-link home-link" aria-label="theatre"><span class="desktop-label">music for theatre</span><span class="mobile-label">theatre</span></a>
+        <a href="/music" class="nav-link active">music</a>
+        <a href="/audiovisual" class="nav-link">audiovisual</a>
+        <a href="/contact" class="nav-link">contact</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="music-page">
+    <a
+      class="music-discogs-link"
+      href="https://www.discogs.com/fr/artist/5751087-Apulati-Bien?superFilter=Releases"
+      target="_blank"
+      rel="noreferrer"
+    >
+      view all releases on discogs →
+    </a>
+
+    {albums.length > 0 && (
+      <div class="music-section">
+        <h2 class="section-title">albums</h2>
+        <div class="music-grid">
+          {albums.map(item => (
+            <a
+              key={item.key}
+              class="music-card"
+              href={item.url}
+              target="_blank"
+              rel="noreferrer"
+              title={item.title}
+            >
+              <div class="music-cover">
+                <img src={item.src} alt={item.title} loading="lazy" />
+              </div>
+              <div class="music-meta">
+                <div class="music-name">{item.title}</div>
+                {item.format && <div class="music-format">{item.format}</div>}
+                {item.year && <div class="music-year">{item.year}</div>}
+              </div>
+            </a>
+          ))}
+        </div>
+      </div>
+    )}
+
+    {eps.length > 0 && (
+      <div class="music-section">
+        <h2 class="section-title">eps</h2>
+        <div class="music-grid">
+          {eps.map(item => (
+            <a
+              key={item.key}
+              class="music-card"
+              href={item.url}
+              target="_blank"
+              rel="noreferrer"
+              title={item.title}
+            >
+              <div class="music-cover">
+                <img src={item.src} alt={item.title} loading="lazy" />
+              </div>
+              <div class="music-meta">
+                <div class="music-name">{item.title}</div>
+                {item.format && <div class="music-format">{item.format}</div>}
+                {item.year && <div class="music-year">{item.year}</div>}
+              </div>
+            </a>
+          ))}
+        </div>
+      </div>
+    )}
+
+    {compilations.length > 0 && (
+      <div class="music-section">
+        <h2 class="section-title">compilations</h2>
+        <div class="music-grid">
+          {compilations.map(item => (
+            <a
+              key={item.key}
+              class="music-card"
+              href={item.url}
+              target="_blank"
+              rel="noreferrer"
+              title={item.title}
+            >
+              <div class="music-cover">
+                <img src={item.src} alt={item.title} loading="lazy" />
+              </div>
+              <div class="music-meta">
+                <div class="music-name">{item.title}</div>
+                {item.format && <div class="music-format">{item.format}</div>}
+                {item.year && <div class="music-year">{item.year}</div>}
+              </div>
+            </a>
+          ))}
+        </div>
+      </div>
+    )}
+  </div>
+</body>
+</html>
