@@ -6,32 +6,32 @@
     "scenes": [
       {
         "id": "1-scene-0",
-        "videoUrl": "/assets/videos/Elie Concours 1.mp4",
+        "videoUrl": "https://github.com/dahemar/video-assets/releases/download/media-assets-2026-01-28/Elie.Concours.1.mp4",
         "thumbnail": "/assets/images/thumbnails/Elie Concours 1.jpg"
       },
       {
         "id": "1-scene-1",
-        "videoUrl": "/assets/videos/Elie Concours 2.mp4",
+        "videoUrl": "https://github.com/dahemar/video-assets/releases/download/media-assets-2026-01-28/Elie.Concours.2.mp4",
         "thumbnail": "/assets/images/thumbnails/Elie Concours 2.jpg"
       },
       {
         "id": "1-scene-2",
-        "videoUrl": "/assets/videos/Elie Concours 3.mp4",
+        "videoUrl": "https://github.com/dahemar/video-assets/releases/download/media-assets-2026-01-28/Elie.Concours.3.mp4",
         "thumbnail": "/assets/images/thumbnails/Elie Concours 3.jpg"
       },
       {
         "id": "1-scene-3",
-        "videoUrl": "/assets/videos/Jeremiades 1.mp4",
+        "videoUrl": "https://github.com/dahemar/video-assets/releases/download/media-assets-2026-01-28/Jeremiades.1.mp4",
         "thumbnail": "/assets/images/thumbnails/Jeremiades 1.jpg"
       },
       {
         "id": "1-scene-4",
-        "videoUrl": "/assets/videos/Jeremiades 2.mp4",
+        "videoUrl": "https://github.com/dahemar/video-assets/releases/download/media-assets-2026-01-28/Jeremiades.2.mp4",
         "thumbnail": "/assets/images/thumbnails/Jeremiades 2.jpg"
       },
       {
         "id": "1-scene-5",
-        "videoUrl": "/assets/videos/Jeremiades 3.mp4",
+        "videoUrl": "https://github.com/dahemar/video-assets/releases/download/media-assets-2026-01-28/Jeremiades.3.mp4",
         "thumbnail": "/assets/images/thumbnails/Jeremiades 3.jpg"
       }
     ],
