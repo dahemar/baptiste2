@@ -1,0 +1,97 @@
+.sidebar {
+    width: 160px;
+    background-color: #fff;
+    padding: 2rem;
+    padding-left: 0;
+    position: fixed;
+    height: 100vh;
+    overflow-y: auto;
+}
+
+.sidebar ul {
+    list-style: none;
+    line-height: 1.1;
+    padding: 0;
+    margin: 0;
+}
+
+.sidebar li {
+    margin-bottom: 0.2rem;
+}
+
+.sidebar a {
+    text-decoration: none;
+    color: #333;
+    font-size: 1rem;
+    display: block;
+    padding: 0rem 0 1rem 0;
+}
+
+/* Removed hover animation */
+
+.sidebar a.active {
+    text-decoration: underline;
+    color: #0066cc;
+    background: linear-gradient(135deg, #0066cc 0%, #0052a3 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    text-decoration-color: #0066cc;
+}
+
+
+
+@media (max-width: 768px) {
+    .sidebar {
+        width: 100%;
+        height: auto;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 1000;
+        background-color: #fff;
+        border-bottom: 1px solid #ddd;
+        padding: 0.5rem;
+        margin: 0;
+        box-sizing: border-box;
+    }
+    
+    .sidebar ul {
+        display: flex;
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 0;
+        padding: 0 0.5rem;
+        margin: 0;
+    }
+    
+    .sidebar li {
+        margin-bottom: 0;
+        text-align: center;
+        min-width: 0;
+        position: relative;
+    }
+    
+    .sidebar a {
+        padding: 0.5rem;
+        font-size: 1rem;
+        white-space: nowrap;
+        margin: 0;
+        transition: none !important;
+        animation: none !important;
+    }
+    
+
+    
+    /* Remove all hover and active effects on mobile */
+    .sidebar a:hover,
+    .sidebar a:active,
+    .sidebar a:focus {
+        background-color: transparent;
+        transition: none !important;
+        animation: none !important;
+    }
+} 
