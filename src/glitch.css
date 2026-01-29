@@ -1,0 +1,49 @@
+/* Simplified Glitch Effects - Applied to all pages */
+
+/* Base glitch animation keyframes for title */
+@keyframes glitch {
+    0% {
+        transform: translate(0);
+    }
+    20% {
+        transform: translate(-2px, 2px);
+    }
+    40% {
+        transform: translate(-2px, -2px);
+    }
+    60% {
+        transform: translate(2px, 2px);
+    }
+    80% {
+        transform: translate(2px, -2px);
+    }
+    100% {
+        transform: translate(0);
+    }
+}
+
+/* Subtle text glitch for headings */
+h1, h2 {
+    position: relative;
+    transition: all 0.3s ease;
+}
+
+/* Removed glitch animation on hover */
+
+/* Crosshair cursor for all pages */
+body {
+    cursor: crosshair;
+}
+
+/* Keep default cursor for interactive elements */
+a, button, input, textarea, select, iframe, video, img {
+    cursor: pointer;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    h1:hover, h2:hover {
+        animation: none;
+        text-shadow: none;
+    }
+} 
