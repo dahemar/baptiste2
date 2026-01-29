@@ -11,4 +11,4 @@
     "preview": "cd astro-app && npm ci && npm run preview"
   }
 }
-      "scripts": {
+
