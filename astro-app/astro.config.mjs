@@ -30,5 +30,29 @@ export default defineConfig({
 });
 */
 
-// Minimal safe config for debugging startup blocking
-export default {};
+import { defineConfig } from 'astro/config';
+import react from '@astrojs/react';
+import vercel from '@astrojs/vercel/serverless';
+
+// https://astro.build/config
+export default defineConfig({
+  adapter: vercel(),
+  root: '.', // Forzar root explícito para evitar escaneo del directorio padre
+  integrations: [react()],
+  // Optimización de build
+  vite: {
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            'hls': ['hls.js']
+          }
+        }
+      }
+    },
+    // Asegurar que hls.js no cause problemas en SSR
+    ssr: {
+      noExternal: ['hls.js']
+    }
+  }
+});

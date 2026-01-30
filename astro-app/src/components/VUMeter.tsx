@@ -20,6 +20,8 @@ const initGlobalAudioContext = () => {
       
       (window as any).GLOBAL_AUDIO_CONTEXT = GLOBAL_AUDIO_CONTEXT;
       (window as any).GLOBAL_ANALYSER = GLOBAL_ANALYSER;
+      // eslint-disable-next-line no-console
+      console.debug('[VUMeter] AudioContext initialized', { state: GLOBAL_AUDIO_CONTEXT.state });
     } catch (error) {
       console.error('Error initializing global AudioContext:', error);
     }
@@ -48,15 +50,34 @@ const connectMediaToAnalyser = (mediaElement: HTMLMediaElement | null) => {
         console.error('Error resuming AudioContext:', err);
       });
     }
-    
+
+    // Diagnostic: log crossOrigin + origin check to detect possible CORS restrictions
+    try {
+      const src = (mediaElement.currentSrc || mediaElement.src) || '';
+      let originDifferent = false;
+      try { originDifferent = new URL(src).origin !== location.origin; } catch {}
+      // eslint-disable-next-line no-console
+      console.debug('[VUMeter] connecting media', { src, crossOrigin: mediaElement.crossOrigin, originDifferent });
+      if (originDifferent && !mediaElement.crossOrigin) {
+        // eslint-disable-next-line no-console
+        console.warn('[VUMeter] media source appears cross-origin and <video> has no crossOrigin attribute; MediaElementAudioSourceNode may be blocked by CORS.');
+      }
+    } catch (e) {
+      // ignore
+    }
+
     const source = context.createMediaElementSource(mediaElement);
     source.connect(analyser);
     
     CONNECTED_AUDIO_ELEMENTS.add(mediaElement);
     mediaEl._webAudioSource = source;
     mediaEl._audioNode = source;
+    // eslint-disable-next-line no-console
+    console.debug('[VUMeter] connected media to analyser', { src: mediaElement.currentSrc || mediaElement.src });
   } catch (error: any) {
     if (error.message && (error.message.includes('already connected') || error.message.includes('MediaElementSourceNode'))) {
+      // eslint-disable-next-line no-console
+      console.debug('[VUMeter] media already connected to AudioContext', { src: mediaElement.currentSrc || mediaElement.src });
       CONNECTED_AUDIO_ELEMENTS.add(mediaElement);
       return;
     }

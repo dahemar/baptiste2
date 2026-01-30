@@ -59,6 +59,105 @@ interface VideoGridProps {
  * Migrated from React SceneGrid with core functionality
  */
 export default function VideoGrid({ works }: VideoGridProps) {
+  // DEV logging: surface incoming props shape to help debug missing videos
+  useEffect(() => {
+    try {
+      const sample = Array.isArray(works) && works.length > 0 ? works[0] : null;
+      // eslint-disable-next-line no-console
+      console.debug('[VideoGrid] mounted - works.length=', Array.isArray(works) ? works.length : typeof works, 'sample=', sample);
+      if ((import.meta as any).env?.DEV) {
+        // Show a small overlay with counts for quick visual feedback
+        try {
+          renderDebugOverlay(`VideoGrid\nworks: ${Array.isArray(works) ? works.length : 'n/a'}\nscenes(sample): ${sample?.scenes?.length ?? 'n/a'}`);
+        } catch {}
+      }
+    } catch (e) { /* swallow logging errors */ }
+  }, [works]);
+
+  /**
+   * Normalize proxied URLs: older cache values used `/api/proxy?url=ENCODED` which
+   * our dev server wasn't reliably receiving. Convert to a path-based base64 URL
+   * using a URL-safe base64 (replace +/ with -_ and drop padding). This avoids
+   * issues with slashes and query-string stripping.
+   */
+  function normalizeProxiedUrl(url?: string | null) {
+    if (!url) return undefined;
+    try {
+      // already path-based
+      if (url.startsWith('/api/proxy/')) return url;
+      const q = url.split('?url=');
+      if (q.length === 2) {
+        const decoded = decodeURIComponent(q[1]);
+        // btoa is safe here because the target is ASCII URL
+        const rawB64 = (typeof window !== 'undefined' && (window as any).btoa) ? (window as any).btoa(decoded) : Buffer.from(decoded, 'utf8').toString('base64');
+        const safe = rawB64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+        return `/api/proxy/${safe}`;
+      }
+      return url;
+    } catch (e) {
+      return url;
+    }
+  }
+
+  // DEV-only registration of proxied URLs to avoid relying on query-string behavior
+  const DEV_ALLOWED_HOSTS = [
+    'github.com',
+    'release-assets.githubusercontent.com',
+    'github-production-release-asset-2e65be.s3.amazonaws.com',
+    'github-production-release-asset-*.s3.amazonaws.com'
+  ];
+
+  const [registeredIds, setRegisteredIds] = React.useState<Record<string,string>>({});
+  const registeredRef = React.useRef<Record<string,string>>({});
+
+  function hostIsAllowedForDev(url?: string) {
+    if (!url) return false;
+    try {
+      const u = new URL(url);
+      return DEV_ALLOWED_HOSTS.some(h => h.includes('*') ? u.hostname.startsWith(h.split('*')[0]) : u.hostname === h);
+    } catch { return false; }
+  }
+
+  useEffect(() => {
+    if (!(import.meta as any).env?.DEV) return;
+    // register all dev-eligible video urls once
+    const toRegister = new Set<string>();
+    works.forEach(w => w.scenes?.forEach(s => {
+      const url = s.videoUrl;
+      if (hostIsAllowedForDev(url)) toRegister.add(url);
+    }));
+
+    toRegister.forEach(url => {
+      if (registeredRef.current[url]) return; // already registered
+      // POST /api/proxy/register to get an id
+      (async () => {
+        try {
+          const res = await fetch('/api/proxy/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }) });
+          if (!res.ok) {
+            console.debug('[VideoGrid] register failed', { url, status: res.status });
+            return;
+          }
+          const j = await res.json();
+          if (j?.id) {
+            registeredRef.current[url] = j.id;
+            setRegisteredIds(prev => ({ ...prev, [url]: j.id }));
+            console.debug('[VideoGrid] registered proxied id', { url, id: j.id });
+          }
+        } catch (e) {
+          console.warn('[VideoGrid] register error', e);
+        }
+      })();
+    });
+  }, [works]);
+
+  function servedUrlForScene(scene: Scene) {
+    if ((import.meta as any).env?.DEV) {
+      const id = registeredIds[scene.videoUrl];
+      if (id) return `/api/proxy/serve?id=${encodeURIComponent(id)}`;
+    }
+    return normalizeProxiedUrl(scene.proxiedVideoUrl ?? scene.videoUrl) ?? undefined;
+  }
+
   const [currentWorkIndex, setCurrentWorkIndex] = useState(0);
   const [currentSceneIndex, setCurrentSceneIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -69,6 +168,8 @@ export default function VideoGrid({ works }: VideoGridProps) {
   const mobileFixedVideoRef = useRef<HTMLVideoElement | null>(null);
   const [showSceneArrows, setShowSceneArrows] = useState(false);
   const arrowsTimerRef = useRef<number | null>(null);
+  // Debug: count of video failures observed at runtime
+  const [videoFailures, setVideoFailures] = useState(0);
 
   // Parse credits from current work
   const currentWork = works[currentWorkIndex];
@@ -165,6 +266,120 @@ export default function VideoGrid({ works }: VideoGridProps) {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // Attach runtime listeners to all video elements for debug (loadedmetadata, error, play rejection)
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    let failures = 0;
+    const listeners: Array<() => void> = [];
+
+    const attach = (video: HTMLVideoElement) => {
+      try {
+        // log creation
+        // eslint-disable-next-line no-console
+        console.debug('[VideoGrid] video element created', { src: video.currentSrc || video.src, poster: video.getAttribute('poster') });
+
+        const onLoaded = () => {
+          // Detect audio availability where possible
+          const hasAudio = (video as any).mozHasAudio === true || (video as any).webkitAudioDecodedByteCount > 0 || (video as any).audioTracks?.length > 0 || (video as any).captureStream ? true : undefined;
+          // eslint-disable-next-line no-console
+          console.debug('[VideoGrid] loadedmetadata', { src: video.currentSrc || video.src, duration: video.duration, videoWidth: video.videoWidth, videoHeight: video.videoHeight, muted: video.muted, volume: video.volume, defaultMuted: (video as any).defaultMuted, hasAudio, audioTracks: (video as any).audioTracks });
+        };
+        video.addEventListener('loadedmetadata', onLoaded);
+        listeners.push(() => video.removeEventListener('loadedmetadata', onLoaded));
+
+        const onError = (ev: any) => {
+          failures++;
+          setVideoFailures((v) => v + 1);
+          // eslint-disable-next-line no-console
+          console.error('[VideoGrid] video error', { src: video.currentSrc || video.src, code: ev?.target?.error?.code, message: ev?.target?.error?.message });
+        };
+        video.addEventListener('error', onError);
+        listeners.push(() => video.removeEventListener('error', onError));
+
+        // Poster fallback: try to load poster, if it fails try local candidate names
+        const poster = video.getAttribute('poster');
+        if (poster) {
+          try {
+            const img = new Image();
+            let triedFallback = false;
+            img.onload = () => {
+              // works
+            };
+            img.onerror = () => {
+              // Try some local candidates derived from poster filename or video filename
+              if (triedFallback) return;
+              triedFallback = true;
+              const tryCandidates = (cands: string[]) => {
+                for (const c of cands) {
+                  const p = `/assets/images/thumbnails/${c}`;
+                  const im = new Image();
+                  im.onload = () => {
+                    video.setAttribute('poster', p);
+                  };
+                  im.onerror = () => {};
+                  im.src = p;
+                }
+              };
+
+              const base = (poster.split('/').pop() || '').split('#')[0].split('?')[0];
+              const nameNoExt = base.replace(/\.[^.]+$/, '');
+              const candidates = [
+                `${nameNoExt}.jpg`,
+                `${nameNoExt.replace(/\./g, ' ')}.jpg`,
+                `${nameNoExt.normalize('NFD').replace(/\p{Diacritic}/gu, '')}.jpg`
+              ];
+              tryCandidates(candidates);
+
+              // finally try deriving from video src
+              const vbase = (video.src || '').split('/').pop() || '';
+              const vNoExt = vbase.replace(/\.[^.]+$/, '');
+              tryCandidates([`${vNoExt.replace(/\./g,' ')}.jpg`, `${vNoExt}.jpg`]);
+            };
+            img.src = poster;
+          } catch {}
+        }
+
+        // Wrap play() to log rejection
+        const origPlay = video.play;
+        // @ts-ignore - override for instrumentation
+        video.play = function () {
+          // @ts-ignore
+          return origPlay.apply(this).catch((err: any) => {
+            failures++;
+            setVideoFailures((v) => v + 1);
+            // eslint-disable-next-line no-console
+            console.error('[VideoGrid] play() rejected', { src: video.currentSrc || video.src, err });
+            throw err;
+          });
+        };
+        // restore function on cleanup
+        listeners.push(() => { try { video.play = origPlay; } catch {} });
+      } catch (e) {
+        // ignore
+      }
+    };
+
+    const videos = Array.from(document.querySelectorAll<HTMLVideoElement>('.scene-item video, .mobile-item video, video[ref]'));
+    videos.forEach(attach);
+
+    // Also observe future additions (islands hydrate after SSR)
+    const mo = new MutationObserver((muts) => {
+      for (const m of muts) {
+        for (const node of Array.from(m.addedNodes)) {
+          if (node instanceof HTMLElement) {
+            const newVideos = Array.from(node.querySelectorAll ? node.querySelectorAll('video') : []);
+            newVideos.forEach(attach);
+            if (node.tagName === 'VIDEO') attach(node as HTMLVideoElement);
+          }
+        }
+      }
+    });
+    mo.observe(document.body, { childList: true, subtree: true });
+    listeners.push(() => mo.disconnect());
+
+    return () => listeners.forEach((fn) => { try { fn(); } catch {} });
+  }, [works, currentWorkIndex, currentSceneIndex, isMobile]);
+
   // Pause all videos except the specified one
   const pauseAllVideosExcept = useCallback((workIdx: number | null, sceneIdx: number | null) => {
     const allVideos = document.querySelectorAll('.scene-item video');
@@ -189,11 +404,25 @@ export default function VideoGrid({ works }: VideoGridProps) {
     
     if (videoElement) {
       try {
+        // Ensure audio is enabled when user requests playback
+        try { videoElement.muted = false; videoElement.volume = 1.0; } catch {}
+        // eslint-disable-next-line no-console
+        console.debug('[VideoGrid] attempting to play', { src: videoElement.currentSrc || videoElement.src, muted: videoElement.muted, volume: videoElement.volume });
         videoElement.currentTime = 0;
         await videoElement.play();
         activeVideoRef.current = videoElement;
+        // Log success and audio state
+        // eslint-disable-next-line no-console
+        console.debug('[VideoGrid] play succeeded', { src: videoElement.currentSrc || videoElement.src, muted: videoElement.muted, volume: videoElement.volume, audioTracks: (videoElement as any).audioTracks?.length });
+        const onPlaying = () => {
+          // eslint-disable-next-line no-console
+          console.debug('[VideoGrid] playing event', { src: videoElement.currentSrc || videoElement.src, muted: videoElement.muted, volume: videoElement.volume });
+          videoElement.removeEventListener('playing', onPlaying);
+        };
+        videoElement.addEventListener('playing', onPlaying);
       } catch (error) {
-        console.error('Error playing video:', error);
+        // eslint-disable-next-line no-console
+        console.error('[VideoGrid] Error playing video:', error);
       }
     }
   }, []);
@@ -353,6 +582,7 @@ export default function VideoGrid({ works }: VideoGridProps) {
     return (
       <div className="scene-grid mobile">
         {isPlaying && currentWorkIndex !== null && currentSceneIndex !== null && (
+      <>
           <div
             className="mobile-fixed-player"
             onTouchStart={() => {
@@ -443,6 +673,7 @@ export default function VideoGrid({ works }: VideoGridProps) {
                 src={works[currentWorkIndex]?.scenes?.[currentSceneIndex]?.videoUrl}
                 poster={works[currentWorkIndex]?.scenes?.[currentSceneIndex]?.thumbnail}
                 loop
+                crossOrigin="anonymous"
                 playsInline
                 preload="auto"
                 controls={false}
@@ -498,6 +729,7 @@ export default function VideoGrid({ works }: VideoGridProps) {
               credits={credits}
             />
           </div>
+          </>
         )}
 
         {!isPlaying && (
@@ -523,9 +755,10 @@ export default function VideoGrid({ works }: VideoGridProps) {
                       data-work-index={workIdx}
                     >
                       {firstScene ? (
-                        <video
-                          src={firstScene.videoUrl}
+                                <video
+                          src={servedUrlForScene(firstScene)}
                           poster={firstScene.thumbnail}
+                          crossOrigin="anonymous"
                           playsInline
                           preload="metadata"
                           loop
@@ -555,6 +788,13 @@ export default function VideoGrid({ works }: VideoGridProps) {
             })}
           </div>
         )}
+      {/* Debug badge (DEV only) */}
+      {(import.meta as any).env?.DEV && (
+        <div style={{position:'fixed',left:8,bottom:8,zIndex:999999,background:'rgba(0,0,0,0.75)',color:'#fff',padding:'6px 8px',borderRadius:6,fontSize:12}}>
+          <div>videos: {Array.isArray(works) ? works.reduce((s,w)=>s+(w.scenes?.length||0),0) : 'n/a'}</div>
+          <div>failures: {videoFailures}</div>
+        </div>
+      )}
       </div>
     );
   }
@@ -605,8 +845,9 @@ export default function VideoGrid({ works }: VideoGridProps) {
                     onMouseLeave={() => setHoveredScene(null)}
                   >
                     <video
-                      src={scene.videoUrl}
+                      src={servedUrlForScene(scene)}
                       poster={scene.thumbnail}
+                      crossOrigin="anonymous"
                       playsInline
                       preload={workIdx === currentWorkIndex ? 'metadata' : 'none'}
                       loop
@@ -628,6 +869,16 @@ export default function VideoGrid({ works }: VideoGridProps) {
           ))}
         </div>
       </div>
+
+      {/* Debug badge (DEV only) */}
+      {(import.meta as any).env?.DEV && (
+        <div style={{position:'fixed',left:8,bottom:8,right:8,zIndex:999999,display:'flex',gap:12,justifyContent:'flex-end'}}>
+          <div style={{background:'rgba(0,0,0,0.75)',color:'#fff',padding:'6px 8px',borderRadius:6,fontSize:12}}>
+            <div>videos: {Array.isArray(works) ? works.reduce((s,w)=>s+(w.scenes?.length||0),0) : 'n/a'}</div>
+            <div>failures: {videoFailures}</div>
+          </div>
+        </div>
+      )}
 
       {/* Credits Panel */}
       <CreditsPanel

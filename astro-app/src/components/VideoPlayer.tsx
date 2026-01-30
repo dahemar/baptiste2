@@ -131,6 +131,7 @@ export default function VideoPlayer({
         className="video-player"
         preload="none"
         controls
+        crossOrigin="anonymous"
         playsInline
         webkit-playsinline="true"
         poster={poster}

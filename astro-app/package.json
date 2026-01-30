@@ -19,6 +19,7 @@
     "react-router-dom": "^7.13.0"
   },
   "devDependencies": {
+    "@astrojs/vercel": "^9.0.4",
     "@types/node": "^22.13.1",
     "@types/react": "^19.2.9",
     "@types/react-dom": "^19.2.3",

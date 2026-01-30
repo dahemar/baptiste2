@@ -179,6 +179,7 @@ const TheatreWorks = ({ works }) => {
             key={`${gifKey}-${playState}`}
             src={currentWork.gifs[currentGifIndex]}
             className="theatre-gif"
+            crossOrigin="anonymous"
             style={{ 
               filter: isPlaying ? 'none' : 'grayscale(100%) brightness(0.8)'
             }}

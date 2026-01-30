@@ -1,9 +1,35 @@
 ---
-// Temporarily disable Google Sheets fetch during debugging to avoid startup blocking.
-// This placeholder keeps the route but prevents top-level network/file I/O.
-const works = [];
-const totalVideos = 0;
-const currentWork = null;
+import VideoGrid from '../components/VideoGrid';
+import { loadFromCache } from '../utils/googleSheetsManager';
+
+// Prefer reading the server-side cache for SSR so the page renders with data
+// (fallback to the API fetch only if the cache is empty). Add logs for debug.
+let works = [];
+try {
+  const cached = await loadFromCache();
+  if (cached && Array.isArray(cached) && cached.length > 0) {
+    works = cached;
+    console.log('[theatre-works.astro] loaded works from cache count=', works.length);
+  } else {
+    try {
+      const res = await fetch('/api/theatre-works');
+      if (res.ok) {
+        works = await res.json();
+        console.log('[theatre-works.astro] fetched works from API count=', Array.isArray(works) ? works.length : 0);
+      } else {
+        console.warn('[theatre-works.astro] API returned non-ok', res.status);
+      }
+    } catch (e) {
+      console.warn('[theatre-works.astro] fetch to /api/theatre-works failed', e?.message ?? e);
+    }
+  }
+} catch (e) {
+  console.error('[theatre-works.astro] error loading works', e?.message ?? e);
+  works = [];
+}
+
+const totalVideos = Array.isArray(works) ? works.reduce((s, w) => s + (w.scenes?.length || 0), 0) : 0;
+const currentWork = (Array.isArray(works) && works.length > 0) ? works[0] : null;
 const credits = [];
 ---
 
