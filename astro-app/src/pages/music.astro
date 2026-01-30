@@ -1,8 +1,9 @@
 ---
 import '../styles/music.css';
 
+// Load images lazily during dev to avoid eager bundling overhead at startup
 const images = import.meta.glob('../assets/music/*.{jpg,jpeg,png,webp}', {
-  eager: true,
+  eager: false,
   query: '?url',
   import: 'default'
 });

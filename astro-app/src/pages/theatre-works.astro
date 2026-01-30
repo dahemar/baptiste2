@@ -1,16 +1,10 @@
 ---
-import sheetsManager from '../utils/googleSheetsManager';
-import VideoGrid from '../components/VideoGrid';
-
-// Load theatre works data at build time or on-demand
-const works = await sheetsManager.loadTheatreWorksData();
-const totalVideos = works.reduce((sum, work) => sum + work.scenes.length, 0);
-
-// Parse credits from works (simplificado para ahora)
-const currentWork = works.length > 0 ? works[0] : null;
-const credits = currentWork?.credits ? [
-  { role: 'Credits', name: currentWork.credits }
-] : [];
+// Temporarily disable Google Sheets fetch during debugging to avoid startup blocking.
+// This placeholder keeps the route but prevents top-level network/file I/O.
+const works = [];
+const totalVideos = 0;
+const currentWork = null;
+const credits = [];
 ---
 
 <html lang="es">

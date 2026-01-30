@@ -1,4 +1,7 @@
 // @ts-check
+// Temporarily disabled imports and complex config to isolate startup blocking.
+// Revert these changes after diagnosing which import causes the hang.
+/*
 import { defineConfig } from 'astro/config';
 import react from '@astrojs/react';
 
@@ -25,3 +28,7 @@ export default defineConfig({
     }
   }
 });
+*/
+
+// Minimal safe config for debugging startup blocking
+export default {};
