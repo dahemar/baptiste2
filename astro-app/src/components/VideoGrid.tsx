@@ -34,6 +34,7 @@ function renderDebugOverlay(text: string) {
 interface Scene {
   id: string;
   videoUrl: string;
+  proxiedVideoUrl?: string;
   thumbnail?: string;
   duration?: number;
 }
@@ -183,11 +184,17 @@ export default function VideoGrid({ works }: VideoGridProps) {
   }, []);
 
   // Play the specified video
-  const playVideo = useCallback(async (workIdx: number, sceneIdx: number) => {
+  const playVideo = useCallback(async (workIdx: number, sceneIdx: number, fromUserGesture = false) => {
     const selector = `[data-work-index="${workIdx}"][data-scene-index="${sceneIdx}"] video`;
     const videoElement = document.querySelector(selector) as HTMLVideoElement;
     
     if (videoElement) {
+      // If already playing the same video (from useEffect after handleSceneClick), just ensure unmuted
+      if (!videoElement.paused && activeVideoRef.current === videoElement) {
+        videoElement.muted = false;
+        videoElement.volume = 1.0;
+        return;
+      }
       try {
         videoElement.muted = false;
         videoElement.volume = 1.0;
@@ -196,14 +203,16 @@ export default function VideoGrid({ works }: VideoGridProps) {
         activeVideoRef.current = videoElement;
       } catch (error) {
         console.error('Error playing video:', error);
-        // If unmuted play fails due to autoplay policy, try muted then unmute
+        // If unmuted play fails due to autoplay policy, try muted first
         try {
           videoElement.muted = true;
           await videoElement.play();
-          // Unmute after muted play starts
-          videoElement.muted = false;
-          videoElement.volume = 1.0;
           activeVideoRef.current = videoElement;
+          // Only unmute from user gesture context (otherwise browser blocks it)
+          if (fromUserGesture) {
+            videoElement.muted = false;
+            videoElement.volume = 1.0;
+          }
         } catch (e2) {
           console.error('Error playing video (muted fallback):', e2);
         }
@@ -224,7 +233,7 @@ export default function VideoGrid({ works }: VideoGridProps) {
       setIsPlaying(prev => !prev);
       // If resuming, play immediately within user gesture context
       if (!wasPlaying) {
-        playVideo(workIdx, sceneIdx);
+        playVideo(workIdx, sceneIdx, true);
       }
     } else {
       // Change scene and start playing
@@ -233,7 +242,7 @@ export default function VideoGrid({ works }: VideoGridProps) {
       setIsPlaying(true);
       
       // Play immediately within user gesture context (don't defer to useEffect with setTimeout)
-      playVideo(workIdx, sceneIdx);
+      playVideo(workIdx, sceneIdx, true);
       
       // Scroll scene into view
       setTimeout(() => {

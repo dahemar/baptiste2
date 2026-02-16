@@ -106,8 +106,38 @@ export async function fetchFromGoogleSheets(): Promise<any[]> {
     }
   }
 
+  // 2b) Fallback: try loading from local CSV file if Google Sheets returned nothing
   if (!Array.isArray(rows) || rows.length === 0) {
-    console.warn('fetchFromGoogleSheets: no rows obtained from Google Sheets');
+    console.log('fetchFromGoogleSheets: trying local CSV fallback');
+    const csvPaths = [
+      path.resolve(process.cwd(), 'data', 'theatre-works.csv'),
+      path.resolve(process.cwd(), 'astro-app', 'data', 'theatre-works.csv'),
+      path.resolve(process.cwd(), '..', 'astro-app', 'data', 'theatre-works.csv'),
+    ];
+    for (const csvPath of csvPaths) {
+      try {
+        if (!fsSync.existsSync(csvPath)) continue;
+        const csvContent = await fs.readFile(csvPath, 'utf-8');
+        const csvRows = csvContent.split('\n')
+          .map(line => line.replace(/\r$/, ''))
+          .filter(line => line.trim().length > 0)
+          .map(line => {
+            // Simple CSV split - handle fields but none of ours contain commas
+            return line.split(',').map(f => f.trim());
+          });
+        if (csvRows.length > 0) {
+          rows = csvRows;
+          console.log(`fetchFromGoogleSheets: loaded ${rows.length} rows from CSV fallback: ${csvPath}`);
+          break;
+        }
+      } catch (e) {
+        console.warn(`fetchFromGoogleSheets: failed to read CSV ${csvPath}`, (e as any)?.message ?? e);
+      }
+    }
+  }
+
+  if (!Array.isArray(rows) || rows.length === 0) {
+    console.warn('fetchFromGoogleSheets: no rows obtained from any source');
     cache.set(CACHE_KEY, []);
     try { await saveToCache([]); } catch {}
     return [];
@@ -472,7 +502,16 @@ export async function loadTheatreWorksData(options?: { force?: boolean }) {
   if (!force) {
     try {
       const cached = await loadFromCache();
-      if (Array.isArray(cached) && cached.length > 0) return cached;
+      if (Array.isArray(cached) && cached.length > 0) {
+        // Check if cache is stale: scenes should have proxiedVideoUrl and thumbnail
+        const firstScene = cached[0]?.scenes?.[0];
+        const isStale = firstScene && !firstScene.proxiedVideoUrl && !firstScene.thumbnail;
+        if (isStale) {
+          console.warn('loadTheatreWorksData: cache appears stale (no proxiedVideoUrl/thumbnail), forcing refresh');
+        } else {
+          return cached;
+        }
+      }
     } catch (e) {
       console.warn('loadTheatreWorksData: loadFromCache failed', (e as any)?.message ?? e);
     }
