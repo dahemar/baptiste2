@@ -1,14 +1,5 @@
 {
-  "outputDirectory": "dist",
   "redirects": [
     { "source": "/", "destination": "/theatre-works", "permanent": true }
-  ]
-}
-{
-  "rewrites": [
-    {
-      "source": "/(.*)",
-      "destination": "/"
-    }
   ]
 }
