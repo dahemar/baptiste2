@@ -272,8 +272,8 @@ export default function VideoGrid({ works }: VideoGridProps) {
       }
     };
 
-    // If already buffered enough, play immediately
-    if (videoElement.readyState >= 3) {
+    // If already buffered enough, play immediately (readyState 2+ = has current frame)
+    if (videoElement.readyState >= 2) {
       await doPlay();
     } else {
       // Wait for canplay with a safety timeout
@@ -288,7 +288,7 @@ export default function VideoGrid({ works }: VideoGridProps) {
       
       videoElement.addEventListener('canplay', handleCanPlay);
       
-      // Safety timeout: force play after 5s even if canplay hasn't fired
+      // Safety timeout: force play after 3s even if canplay hasn't fired
       const timeoutId = window.setTimeout(() => {
         videoElement.removeEventListener('canplay', handleCanPlay);
         if (pendingCanPlayRef.current?.el === videoElement) {
@@ -296,7 +296,7 @@ export default function VideoGrid({ works }: VideoGridProps) {
         }
         console.warn('[VideoGrid] canplay timeout, forcing play');
         doPlay();
-      }, 5000);
+      }, 3000);
       
       pendingCanPlayRef.current = { el: videoElement, handler: handleCanPlay, timeout: timeoutId };
       
@@ -791,7 +791,7 @@ export default function VideoGrid({ works }: VideoGridProps) {
                       playsInline
                       preload={
                         workIdx === currentWorkIndex && sceneIdx === currentSceneIndex ? 'auto' :
-                        workIdx === currentWorkIndex && Math.abs(sceneIdx - currentSceneIndex) <= 1 ? 'metadata' :
+                        workIdx === currentWorkIndex && Math.abs(sceneIdx - currentSceneIndex) <= 1 ? 'auto' :
                         'none'
                       }
                       loop
