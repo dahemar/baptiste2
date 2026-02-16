@@ -4,6 +4,45 @@ export const prerender = false;
 
 export function getStaticPaths() { return []; }
 
+// Simple in-memory concurrency limiter and HEAD cache for development
+const MAX_CONCURRENT = 6;
+let currentConcurrent = 0;
+const pendingQueue: Array<() => void> = [];
+
+function acquireSlot(): Promise<void> {
+  return new Promise((resolve) => {
+    if (currentConcurrent < MAX_CONCURRENT) {
+      currentConcurrent++;
+      resolve();
+      return;
+    }
+    pendingQueue.push(() => {
+      currentConcurrent++;
+      resolve();
+    });
+  });
+}
+
+function releaseSlot() {
+  currentConcurrent = Math.max(0, currentConcurrent - 1);
+  const next = pendingQueue.shift();
+  if (next) next();
+}
+
+const HEAD_CACHE_TTL = 30_000; // 30s
+const headCache = new Map<string, { expires: number; status: number; headers: Record<string,string> }>();
+
+function cacheHead(target: string, status: number, headers: Record<string,string>) {
+  headCache.set(target, { expires: Date.now() + HEAD_CACHE_TTL, status, headers });
+}
+
+function getCachedHead(target: string) {
+  const v = headCache.get(target);
+  if (!v) return null;
+  if (v.expires < Date.now()) { headCache.delete(target); return null; }
+  return v;
+}
+
 const ALLOWED_HOSTS = [
   'github.com',
   'release-assets.githubusercontent.com',
@@ -34,16 +73,58 @@ function base64urlToString(s: string) {
   }
 }
 
+function sleep(ms: number) { return new Promise(resolve => setTimeout(resolve, ms)); }
+
+async function fetchWithRetries(target: string, opts: RequestInit, attempts = 2, timeoutMs = 10000) {
+  let lastErr: any = null;
+  for (let i = 0; i <= attempts; i++) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const res = await fetch(target, { ...opts, signal: controller.signal });
+      clearTimeout(timeout);
+      // Treat 5xx as retryable
+      if (res.status >= 500 && i < attempts) {
+        lastErr = new Error(`Upstream ${res.status}`);
+        await sleep(200 * Math.pow(2, i));
+        continue;
+      }
+      return res;
+    } catch (e: any) {
+      clearTimeout(timeout);
+      lastErr = e;
+      if (e?.name === 'AbortError') {
+        // timeout - if last attempt, rethrow
+        if (i === attempts) throw e;
+      }
+      // wait a bit before retrying
+      if (i < attempts) await sleep(200 * Math.pow(2, i));
+    }
+  }
+  throw lastErr;
+}
+
 export const GET: APIRoute = async ({ params, request }) => {
   const targetB64 = params?.target as string | undefined;
   if (!targetB64) return new Response('Missing target', { status: 400 });
-
   let target: string;
+  // Accept either a percent-encoded plain URL (client may encode the URL into the
+  // path), or a base64url-encoded target. Try decodeURIComponent first; if the
+  // result looks like an http(s) URL use it, otherwise fall back to base64url.
   try {
-    target = base64urlToString(targetB64);
-  } catch (e: any) {
-    console.error('[api/proxy] invalid base64', e?.message ?? e);
-    return new Response(String(e?.message ?? e), { status: 400 });
+    const maybe = decodeURIComponent(targetB64);
+    if (maybe.startsWith('http://') || maybe.startsWith('https://')) {
+      target = maybe;
+    } else {
+      target = base64urlToString(targetB64);
+    }
+  } catch (e) {
+    try {
+      target = base64urlToString(targetB64);
+    } catch (e2: any) {
+      console.error('[api/proxy] invalid target encoding', e2?.message ?? e2);
+      return new Response(String(e2?.message ?? e2), { status: 400 });
+    }
   }
 
   console.log('[api/proxy] proxying GET', { target });
@@ -56,7 +137,40 @@ export const GET: APIRoute = async ({ params, request }) => {
     const upstreamHeaders: Record<string, string> = {};
     if (range) upstreamHeaders['range'] = range;
 
-    const res = await fetch(target, { method: 'GET', redirect: 'follow', headers: upstreamHeaders });
+    // Preflight with HEAD (cached) to fail fast and get headers without downloading body
+    const cached = getCachedHead(target);
+    if (cached) {
+      if (cached.status >= 500) {
+        console.warn('[api/proxy] cached HEAD indicates upstream problem', { target, status: cached.status });
+        return new Response('Upstream unavailable', { status: 502 });
+      }
+    } else {
+      try {
+        const headRes = await fetchWithRetries(target, { method: 'HEAD', redirect: 'follow' }, 1, 5000);
+        const h: Record<string,string> = {};
+        ['content-type','content-length','accept-ranges','last-modified','etag','content-disposition'].forEach(hk => {
+          const v = headRes.headers.get(hk);
+          if (v) h[hk] = v;
+        });
+        cacheHead(target, headRes.status, h);
+        if (!headRes.ok) {
+          console.warn('[api/proxy] upstream HEAD not ok', { target, status: headRes.status });
+          return new Response('Upstream unavailable', { status: 502 });
+        }
+      } catch (e) {
+        console.error('[api/proxy] HEAD preflight failed', e?.message ?? e);
+        return new Response('Upstream unreachable', { status: 502 });
+      }
+    }
+
+    // Use AbortController to avoid hanging for long upstream responses
+    await acquireSlot();
+    let res;
+    try {
+      res = await fetchWithRetries(target, { method: 'GET', redirect: 'follow', headers: upstreamHeaders }, 2, 10000);
+    } finally {
+      releaseSlot();
+    }
 
     const headers = new Headers();
     ['content-type','content-length','content-range','accept-ranges','last-modified','etag','content-disposition'].forEach(h => {
@@ -70,7 +184,9 @@ export const GET: APIRoute = async ({ params, request }) => {
     return new Response(res.body, { status: res.status, headers });
   } catch (e: any) {
     console.error('[api/proxy] GET handler error', e?.stack ?? e);
-    return new Response(String(e?.message ?? e), { status: 500 });
+    // Distinguish abort vs other network errors
+    if (e?.name === 'AbortError') return new Response('Upstream timeout', { status: 504 });
+    return new Response(String(e?.message ?? e), { status: 502 });
   }
 };
 
@@ -79,10 +195,19 @@ export const HEAD: APIRoute = async ({ params }) => {
   if (!targetB64) return new Response('Missing target', { status: 400 });
   let target: string;
   try {
-    target = base64urlToString(targetB64);
-  } catch (e: any) {
-    console.error('[api/proxy] invalid base64 (HEAD)', e?.message ?? e);
-    return new Response(String(e?.message ?? e), { status: 400 });
+    const maybe = decodeURIComponent(targetB64);
+    if (maybe.startsWith('http://') || maybe.startsWith('https://')) {
+      target = maybe;
+    } else {
+      target = base64urlToString(targetB64);
+    }
+  } catch (e) {
+    try {
+      target = base64urlToString(targetB64);
+    } catch (e2: any) {
+      console.error('[api/proxy] invalid base64 (HEAD)', e2?.message ?? e2);
+      return new Response(String(e2?.message ?? e2), { status: 400 });
+    }
   }
 
   console.log('[api/proxy] proxying HEAD', { target });
@@ -91,15 +216,26 @@ export const HEAD: APIRoute = async ({ params }) => {
     const u = new URL(target);
     if (!isAllowedHost(u.hostname)) return new Response('Host not allowed', { status: 403 });
 
-    const res = await fetch(target, { method: 'HEAD', redirect: 'follow' });
+    // Use cached HEAD when available
+    const cached = getCachedHead(target);
+    if (cached) {
+      const headers = new Headers();
+      Object.entries(cached.headers).forEach(([k,v]) => headers.set(k, v));
+      headers.set('Access-Control-Allow-Origin', '*');
+      headers.set('Accept-Ranges', cached.headers['accept-ranges'] || 'bytes');
+      return new Response(null, { status: cached.status, headers });
+    }
+
+    const res = await fetchWithRetries(target, { method: 'HEAD', redirect: 'follow' }, 1, 5000);
     const headers = new Headers();
+    const out: Record<string,string> = {};
     ['content-type','content-length','accept-ranges','last-modified','etag','content-disposition'].forEach(h => {
       const v = res.headers.get(h);
-      if (v) headers.set(h, v);
+      if (v) { headers.set(h, v); out[h] = v; }
     });
     headers.set('Access-Control-Allow-Origin', '*');
     headers.set('Accept-Ranges', res.headers.get('accept-ranges') || 'bytes');
-
+    cacheHead(target, res.status, out);
     return new Response(null, { status: res.status, headers });
   } catch (e: any) {
     console.error('[api/proxy] HEAD handler error', e?.stack ?? e);

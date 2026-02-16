@@ -189,11 +189,24 @@ export default function VideoGrid({ works }: VideoGridProps) {
     
     if (videoElement) {
       try {
+        videoElement.muted = false;
+        videoElement.volume = 1.0;
         videoElement.currentTime = 0;
         await videoElement.play();
         activeVideoRef.current = videoElement;
       } catch (error) {
         console.error('Error playing video:', error);
+        // If unmuted play fails due to autoplay policy, try muted then unmute
+        try {
+          videoElement.muted = true;
+          await videoElement.play();
+          // Unmute after muted play starts
+          videoElement.muted = false;
+          videoElement.volume = 1.0;
+          activeVideoRef.current = videoElement;
+        } catch (e2) {
+          console.error('Error playing video (muted fallback):', e2);
+        }
       }
     }
   }, []);
@@ -207,12 +220,20 @@ export default function VideoGrid({ works }: VideoGridProps) {
     
     if (sameWork && sameScene) {
       // Toggle play/pause for current scene
+      const wasPlaying = isPlaying;
       setIsPlaying(prev => !prev);
+      // If resuming, play immediately within user gesture context
+      if (!wasPlaying) {
+        playVideo(workIdx, sceneIdx);
+      }
     } else {
       // Change scene and start playing
       setCurrentWorkIndex(workIdx);
       setCurrentSceneIndex(sceneIdx);
       setIsPlaying(true);
+      
+      // Play immediately within user gesture context (don't defer to useEffect with setTimeout)
+      playVideo(workIdx, sceneIdx);
       
       // Scroll scene into view
       setTimeout(() => {
@@ -220,7 +241,7 @@ export default function VideoGrid({ works }: VideoGridProps) {
         sceneElement?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
       }, 50);
     }
-  }, [currentWorkIndex, currentSceneIndex, pauseAllVideosExcept]);
+  }, [currentWorkIndex, currentSceneIndex, isPlaying, pauseAllVideosExcept, playVideo]);
 
   // Handle play/pause state
   useEffect(() => {
@@ -440,7 +461,7 @@ export default function VideoGrid({ works }: VideoGridProps) {
               <video
                 key={`player-${currentWorkIndex}-${currentSceneIndex}`}
                 ref={mobileFixedVideoRef}
-                src={works[currentWorkIndex]?.scenes?.[currentSceneIndex]?.videoUrl}
+                src={works[currentWorkIndex]?.scenes?.[currentSceneIndex]?.proxiedVideoUrl ?? works[currentWorkIndex]?.scenes?.[currentSceneIndex]?.videoUrl}
                 poster={works[currentWorkIndex]?.scenes?.[currentSceneIndex]?.thumbnail}
                 loop
                 playsInline
@@ -524,7 +545,7 @@ export default function VideoGrid({ works }: VideoGridProps) {
                     >
                       {firstScene ? (
                         <video
-                          src={firstScene.videoUrl}
+                          src={firstScene.proxiedVideoUrl ?? firstScene.videoUrl}
                           poster={firstScene.thumbnail}
                           playsInline
                           preload="metadata"
@@ -605,10 +626,11 @@ export default function VideoGrid({ works }: VideoGridProps) {
                     onMouseLeave={() => setHoveredScene(null)}
                   >
                     <video
-                      src={scene.videoUrl}
+                      src={scene.proxiedVideoUrl ?? scene.videoUrl}
                       poster={scene.thumbnail}
                       playsInline
-                      preload={workIdx === currentWorkIndex ? 'metadata' : 'none'}
+                      // Preload metadata for the current work and its nearby neighbours
+                      preload={Math.abs(workIdx - currentWorkIndex) <= 2 ? 'metadata' : 'none'}
                       loop
                     />
                     <button 

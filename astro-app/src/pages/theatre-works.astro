@@ -3,7 +3,15 @@ import sheetsManager from '../utils/googleSheetsManager';
 import VideoGrid from '../components/VideoGrid';
 
 // Load theatre works data at build time or on-demand
-const works = await sheetsManager.loadTheatreWorksData();
+let works = [];
+try {
+  console.log('[theatre-works] calling loadTheatreWorksData');
+  works = await sheetsManager.loadTheatreWorksData();
+  console.log('[theatre-works] loadTheatreWorksData returned', Array.isArray(works) ? works.length : typeof works);
+} catch (e) {
+  console.error('[theatre-works] loadTheatreWorksData error', e?.stack ?? e);
+  works = [];
+}
 const totalVideos = works.reduce((sum, work) => sum + work.scenes.length, 0);
 
 // Parse credits from works (simplificado para ahora)
