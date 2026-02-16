@@ -70,6 +70,10 @@ export default function VideoGrid({ works }: VideoGridProps) {
   const mobileFixedVideoRef = useRef<HTMLVideoElement | null>(null);
   const [showSceneArrows, setShowSceneArrows] = useState(false);
   const arrowsTimerRef = useRef<number | null>(null);
+  // Generation counter to cancel stale playVideo operations
+  const playGenRef = useRef(0);
+  // Track pending canplay listener so we can cancel it
+  const pendingCanPlayRef = useRef<{ el: HTMLVideoElement; handler: () => void; timeout: number } | null>(null);
 
   // Parse credits from current work
   const currentWork = works[currentWorkIndex];
@@ -166,8 +170,8 @@ export default function VideoGrid({ works }: VideoGridProps) {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Pause all videos except the specified one
-  const pauseAllVideosExcept = useCallback((workIdx: number | null, sceneIdx: number | null) => {
+  // Hard-stop all videos except the specified one: pause + reset to beginning
+  const stopAllVideosExcept = useCallback((workIdx: number | null, sceneIdx: number | null) => {
     const allVideos = document.querySelectorAll('.scene-item video');
     allVideos.forEach((video) => {
       const videoEl = video as HTMLVideoElement;
@@ -179,117 +183,136 @@ export default function VideoGrid({ works }: VideoGridProps) {
         if (!videoEl.paused) {
           videoEl.pause();
         }
+        // Reset to beginning so they don't hold buffered position
+        videoEl.currentTime = 0;
       }
     });
   }, []);
 
-  // Play the specified video
+  // Play the specified video — always restarts from beginning
   const playVideo = useCallback(async (workIdx: number, sceneIdx: number, fromUserGesture = false) => {
+    // Increment generation to cancel any pending play from a previous call
+    const gen = ++playGenRef.current;
+
+    // Cancel any pending canplay listener from a previous call
+    if (pendingCanPlayRef.current) {
+      const { el, handler, timeout } = pendingCanPlayRef.current;
+      el.removeEventListener('canplay', handler);
+      clearTimeout(timeout);
+      pendingCanPlayRef.current = null;
+    }
+
+    // Hard-stop everything else first
+    stopAllVideosExcept(workIdx, sceneIdx);
+
     const selector = `[data-work-index="${workIdx}"][data-scene-index="${sceneIdx}"] video`;
     const videoElement = document.querySelector(selector) as HTMLVideoElement;
     
-    if (videoElement) {
-      // Restore src if it was removed by lazy loading or buffer cleanup
-      if (!videoElement.hasAttribute('src') || !videoElement.src || videoElement.src === window.location.href) {
-        const scene = works[workIdx]?.scenes?.[sceneIdx];
-        if (scene) {
-          videoElement.src = scene.proxiedVideoUrl ?? scene.videoUrl;
-        }
-      }
+    if (!videoElement) return;
 
-      // If already playing the same video (from useEffect after handleSceneClick), just ensure unmuted
-      if (!videoElement.paused && activeVideoRef.current === videoElement) {
-        videoElement.muted = false;
-        videoElement.volume = 1.0;
-        return;
-      }
-
-      // Boost preload for the selected video so it buffers faster
-      videoElement.preload = 'auto';
-
-      const doPlay = async () => {
-        try {
-          videoElement.muted = false;
-          videoElement.volume = 1.0;
-          await videoElement.play();
-          activeVideoRef.current = videoElement;
-        } catch (error) {
-          console.error('Error playing video:', error);
-          // If unmuted play fails due to autoplay policy, try muted first
-          try {
-            videoElement.muted = true;
-            await videoElement.play();
-            activeVideoRef.current = videoElement;
-            // Only unmute from user gesture context (otherwise browser blocks it)
-            if (fromUserGesture) {
-              videoElement.muted = false;
-              videoElement.volume = 1.0;
-            }
-          } catch (e2) {
-            console.error('Error playing video (muted fallback):', e2);
-          }
-        }
-      };
-
-      // If the video has enough data buffered, play immediately
-      if (videoElement.readyState >= 3) { // HAVE_FUTURE_DATA
-        await doPlay();
-      } else {
-        // Wait for enough data to start playing smoothly
-        const handleCanPlay = () => {
-          videoElement.removeEventListener('canplay', handleCanPlay);
-          doPlay();
-        };
-        videoElement.addEventListener('canplay', handleCanPlay);
-        // Load the video if it hasn't started loading
-        videoElement.load();
+    // Restore src if it was removed by lazy loading
+    if (!videoElement.hasAttribute('src') || !videoElement.src || videoElement.src === window.location.href) {
+      const scene = works[workIdx]?.scenes?.[sceneIdx];
+      if (scene) {
+        videoElement.src = scene.proxiedVideoUrl ?? scene.videoUrl;
       }
     }
-  }, [works]);
 
-  // Handle scene click
+    // Always restart from the beginning
+    videoElement.currentTime = 0;
+    videoElement.preload = 'auto';
+
+    const doPlay = async () => {
+      // Stale check: if user clicked another video while we waited, abort
+      if (playGenRef.current !== gen) return;
+
+      // Make sure all others are still stopped (safety net)
+      stopAllVideosExcept(workIdx, sceneIdx);
+
+      try {
+        videoElement.muted = false;
+        videoElement.volume = 1.0;
+        await videoElement.play();
+        activeVideoRef.current = videoElement;
+      } catch (error) {
+        console.error('Error playing video:', error);
+        // If unmuted play fails due to autoplay policy, try muted first
+        try {
+          videoElement.muted = true;
+          await videoElement.play();
+          activeVideoRef.current = videoElement;
+          if (fromUserGesture) {
+            videoElement.muted = false;
+            videoElement.volume = 1.0;
+          }
+        } catch (e2) {
+          console.error('Error playing video (muted fallback):', e2);
+        }
+      }
+    };
+
+    // If already buffered enough, play immediately
+    if (videoElement.readyState >= 3) {
+      await doPlay();
+    } else {
+      // Wait for canplay with a safety timeout
+      const handleCanPlay = () => {
+        videoElement.removeEventListener('canplay', handleCanPlay);
+        if (pendingCanPlayRef.current?.el === videoElement) {
+          clearTimeout(pendingCanPlayRef.current.timeout);
+          pendingCanPlayRef.current = null;
+        }
+        doPlay();
+      };
+      // Safety timeout: force play after 5s even if canplay hasn't fired
+      const timeoutId = window.setTimeout(() => {
+        videoElement.removeEventListener('canplay', handleCanPlay);
+        if (pendingCanPlayRef.current?.el === videoElement) {
+          pendingCanPlayRef.current = null;
+        }
+        console.warn('[VideoGrid] canplay timeout, forcing play');
+        doPlay();
+      }, 5000);
+      pendingCanPlayRef.current = { el: videoElement, handler: handleCanPlay, timeout: timeoutId };
+      videoElement.addEventListener('canplay', handleCanPlay);
+      videoElement.load();
+    }
+  }, [works, stopAllVideosExcept]);
+
+  // Handle scene click — always restart from beginning, only one video at a time
   const handleSceneClick = useCallback((workIdx: number, sceneIdx: number) => {
-    pauseAllVideosExcept(null, null);
-    
     const sameWork = workIdx === currentWorkIndex;
     const sameScene = sceneIdx === currentSceneIndex;
     
-    if (sameWork && sameScene) {
-      // Toggle play/pause for current scene
-      const wasPlaying = isPlaying;
-      setIsPlaying(prev => !prev);
-      // If resuming, play immediately within user gesture context
-      if (!wasPlaying) {
-        playVideo(workIdx, sceneIdx, true);
-      }
-    } else {
-      // Change scene and start playing
-      setCurrentWorkIndex(workIdx);
-      setCurrentSceneIndex(sceneIdx);
-      setIsPlaying(true);
-      
-      // Play immediately within user gesture context (don't defer to useEffect with setTimeout)
-      playVideo(workIdx, sceneIdx, true);
-      
-      // Scroll scene into view
-      setTimeout(() => {
-        const sceneElement = document.querySelector(`[data-work-index="${workIdx}"][data-scene-index="${sceneIdx}"]`);
-        sceneElement?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-      }, 50);
+    if (sameWork && sameScene && isPlaying) {
+      // Clicking the currently playing video: pause it
+      setIsPlaying(false);
+      stopAllVideosExcept(null, null);
+      return;
     }
-  }, [currentWorkIndex, currentSceneIndex, isPlaying, pauseAllVideosExcept, playVideo]);
 
-  // Handle play/pause state
+    // Any other click: start playing from beginning
+    setCurrentWorkIndex(workIdx);
+    setCurrentSceneIndex(sceneIdx);
+    setIsPlaying(true);
+    
+    // Play immediately within user gesture context
+    playVideo(workIdx, sceneIdx, true);
+    
+    // Scroll scene into view
+    setTimeout(() => {
+      const sceneElement = document.querySelector(`[data-work-index="${workIdx}"][data-scene-index="${sceneIdx}"]`);
+      sceneElement?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    }, 50);
+  }, [currentWorkIndex, currentSceneIndex, isPlaying, stopAllVideosExcept, playVideo]);
+
+  // Handle play/pause state — only stop videos, never start a second play here
+  // (playVideo is called directly from handleSceneClick within user gesture context)
   useEffect(() => {
-    if (isPlaying) {
-      pauseAllVideosExcept(currentWorkIndex, currentSceneIndex);
-      setTimeout(() => {
-        playVideo(currentWorkIndex, currentSceneIndex);
-      }, 100);
-    } else {
-      pauseAllVideosExcept(null, null);
+    if (!isPlaying) {
+      stopAllVideosExcept(null, null);
     }
-  }, [isPlaying, currentWorkIndex, currentSceneIndex, pauseAllVideosExcept, playVideo]);
+  }, [isPlaying, stopAllVideosExcept]);
 
   // Lightweight prefetch: fetch first ~512KB of next scene into browser cache
   // Much lighter than setting preload='auto' on adjacent video elements
