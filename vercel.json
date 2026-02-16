@@ -1,4 +1,6 @@
 {
+  "buildCommand": "cd astro-app && npm ci && npm run build",
+  "outputDirectory": "astro-app/.vercel/output",
   "redirects": [
     { "source": "/", "destination": "/theatre-works", "permanent": true }
   ]
