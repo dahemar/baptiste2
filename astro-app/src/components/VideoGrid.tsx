@@ -239,11 +239,6 @@ export default function VideoGrid({ works }: VideoGridProps) {
     // Always restart from the beginning
     videoElement.currentTime = 0;
     videoElement.preload = 'auto';
-    
-    // If we just restored the src, trigger load to start downloading
-    if (needsLoad) {
-      videoElement.load();
-    }
 
     const doPlay = async () => {
       // Stale check: if user clicked another video while we waited, abort
@@ -304,6 +299,9 @@ export default function VideoGrid({ works }: VideoGridProps) {
       }, 5000);
       
       pendingCanPlayRef.current = { el: videoElement, handler: handleCanPlay, timeout: timeoutId };
+      
+      // Kick the browser to start loading (needed for preload="none" videos)
+      videoElement.load();
     }
   }, [works, stopAllVideosExcept]);
 
