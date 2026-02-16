@@ -70,8 +70,6 @@ export default function VideoGrid({ works }: VideoGridProps) {
   const mobileFixedVideoRef = useRef<HTMLVideoElement | null>(null);
   const [showSceneArrows, setShowSceneArrows] = useState(false);
   const arrowsTimerRef = useRef<number | null>(null);
-  // Track pending canplay listener so we can cancel it when switching videos
-  const pendingCanPlayRef = useRef<{ el: HTMLVideoElement; handler: () => void; timeout: number } | null>(null);
 
   // Parse credits from current work
   const currentWork = works[currentWorkIndex];
@@ -168,7 +166,7 @@ export default function VideoGrid({ works }: VideoGridProps) {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Pause all videos except the specified one and release their buffers
+  // Pause all videos except the specified one
   const pauseAllVideosExcept = useCallback((workIdx: number | null, sceneIdx: number | null) => {
     const allVideos = document.querySelectorAll('.scene-item video');
     allVideos.forEach((video) => {
@@ -181,27 +179,12 @@ export default function VideoGrid({ works }: VideoGridProps) {
         if (!videoEl.paused) {
           videoEl.pause();
         }
-        // Downgrade preload on non-active videos to stop buffering and free connections.
-        // Only keep 'metadata' for same-work adjacent scenes, 'none' for everything else.
-        if (workIdx !== null && videoWorkIndex === workIdx && Math.abs(videoSceneIndex - (sceneIdx ?? 0)) <= 1) {
-          if (videoEl.preload === 'auto') videoEl.preload = 'metadata';
-        } else if (videoEl.preload === 'auto') {
-          videoEl.preload = 'none';
-        }
       }
     });
   }, []);
 
   // Play the specified video
   const playVideo = useCallback(async (workIdx: number, sceneIdx: number, fromUserGesture = false) => {
-    // Cancel any pending canplay listener from a previous playVideo call
-    if (pendingCanPlayRef.current) {
-      const { el, handler, timeout } = pendingCanPlayRef.current;
-      el.removeEventListener('canplay', handler);
-      clearTimeout(timeout);
-      pendingCanPlayRef.current = null;
-    }
-
     const selector = `[data-work-index="${workIdx}"][data-scene-index="${sceneIdx}"] video`;
     const videoElement = document.querySelector(selector) as HTMLVideoElement;
     
@@ -225,11 +208,6 @@ export default function VideoGrid({ works }: VideoGridProps) {
       videoElement.preload = 'auto';
 
       const doPlay = async () => {
-        // Guard: only play if this video is still the intended target
-        // (user may have clicked another scene while we waited for canplay)
-        if (pendingCanPlayRef.current?.el === videoElement) {
-          pendingCanPlayRef.current = null;
-        }
         try {
           videoElement.muted = false;
           videoElement.volume = 1.0;
@@ -257,23 +235,11 @@ export default function VideoGrid({ works }: VideoGridProps) {
       if (videoElement.readyState >= 3) { // HAVE_FUTURE_DATA
         await doPlay();
       } else {
-        // Wait for enough data to start playing smoothly, with a safety timeout
+        // Wait for enough data to start playing smoothly
         const handleCanPlay = () => {
           videoElement.removeEventListener('canplay', handleCanPlay);
           doPlay();
         };
-        // Safety timeout: if canplay doesn't fire within 8s, try to play anyway
-        // (the video might have HAVE_CURRENT_DATA which is enough to start)
-        const timeoutId = window.setTimeout(() => {
-          videoElement.removeEventListener('canplay', handleCanPlay);
-          if (pendingCanPlayRef.current?.el === videoElement) {
-            pendingCanPlayRef.current = null;
-          }
-          console.warn('[VideoGrid] canplay timeout, forcing play for', workIdx, sceneIdx);
-          doPlay();
-        }, 8000);
-        // Store ref so we can cancel from the next playVideo call
-        pendingCanPlayRef.current = { el: videoElement, handler: handleCanPlay, timeout: timeoutId };
         videoElement.addEventListener('canplay', handleCanPlay);
         // Load the video if it hasn't started loading
         videoElement.load();
