@@ -172,6 +172,7 @@ export default function VideoGrid({ works }: VideoGridProps) {
 
   // Hard-stop all videos except the specified one: pause + reset to beginning
   const stopAllVideosExcept = useCallback((workIdx: number | null, sceneIdx: number | null) => {
+    // Stop desktop grid videos
     const allVideos = document.querySelectorAll('.scene-item video');
     allVideos.forEach((video) => {
       const videoEl = video as HTMLVideoElement;
@@ -187,6 +188,21 @@ export default function VideoGrid({ works }: VideoGridProps) {
         videoEl.currentTime = 0;
       }
     });
+
+    // Stop mobile video if it's not the active one
+    if (mobileFixedVideoRef.current) {
+      const mobileVideo = mobileFixedVideoRef.current;
+      const parent = mobileVideo.parentElement;
+      const mobileWorkIdx = parseInt(parent?.getAttribute('data-work-index') || '-1');
+      const mobileSceneIdx = parseInt(parent?.getAttribute('data-scene-index') || '-1');
+      
+      if (workIdx === null || sceneIdx === null || mobileWorkIdx !== workIdx || mobileSceneIdx !== sceneIdx) {
+        if (!mobileVideo.paused) {
+          mobileVideo.pause();
+        }
+        mobileVideo.currentTime = 0;
+      }
+    }
   }, []);
 
   // Play the specified video — always restarts from beginning
@@ -211,16 +227,23 @@ export default function VideoGrid({ works }: VideoGridProps) {
     if (!videoElement) return;
 
     // Restore src if it was removed by lazy loading
+    let needsLoad = false;
     if (!videoElement.hasAttribute('src') || !videoElement.src || videoElement.src === window.location.href) {
       const scene = works[workIdx]?.scenes?.[sceneIdx];
       if (scene) {
         videoElement.src = scene.proxiedVideoUrl ?? scene.videoUrl;
+        needsLoad = true;
       }
     }
 
     // Always restart from the beginning
     videoElement.currentTime = 0;
     videoElement.preload = 'auto';
+    
+    // If we just restored the src, trigger load to start downloading
+    if (needsLoad) {
+      videoElement.load();
+    }
 
     const doPlay = async () => {
       // Stale check: if user clicked another video while we waited, abort
@@ -242,8 +265,11 @@ export default function VideoGrid({ works }: VideoGridProps) {
           await videoElement.play();
           activeVideoRef.current = videoElement;
           if (fromUserGesture) {
+            // Unmute and restart playback to enable audio
             videoElement.muted = false;
             videoElement.volume = 1.0;
+            // Call play again to apply the unmuted state
+            await videoElement.play();
           }
         } catch (e2) {
           console.error('Error playing video (muted fallback):', e2);
@@ -264,6 +290,9 @@ export default function VideoGrid({ works }: VideoGridProps) {
         }
         doPlay();
       };
+      
+      videoElement.addEventListener('canplay', handleCanPlay);
+      
       // Safety timeout: force play after 5s even if canplay hasn't fired
       const timeoutId = window.setTimeout(() => {
         videoElement.removeEventListener('canplay', handleCanPlay);
@@ -273,9 +302,8 @@ export default function VideoGrid({ works }: VideoGridProps) {
         console.warn('[VideoGrid] canplay timeout, forcing play');
         doPlay();
       }, 5000);
+      
       pendingCanPlayRef.current = { el: videoElement, handler: handleCanPlay, timeout: timeoutId };
-      videoElement.addEventListener('canplay', handleCanPlay);
-      videoElement.load();
     }
   }, [works, stopAllVideosExcept]);
 
@@ -369,10 +397,25 @@ export default function VideoGrid({ works }: VideoGridProps) {
       video.pause();
       return;
     }
-    const play = () => {
-      video.muted = false;
-      video.volume = 1.0;
-      video.play().catch(() => {});
+    const play = async () => {
+      try {
+        video.muted = false;
+        video.volume = 1.0;
+        await video.play();
+      } catch (error) {
+        console.error('Error playing mobile video:', error);
+        // If unmuted play fails due to autoplay policy, try muted first
+        try {
+          video.muted = true;
+          await video.play();
+          // Then unmute and play again to enable audio
+          video.muted = false;
+          video.volume = 1.0;
+          await video.play();
+        } catch (e2) {
+          console.error('Error playing mobile video (muted fallback):', e2);
+        }
+      }
     };
     if (video.readyState >= 2) {
       play();
@@ -565,28 +608,35 @@ export default function VideoGrid({ works }: VideoGridProps) {
               </button>
 
               {/* Video element */}
-              <video
-                key={`player-${currentWorkIndex}-${currentSceneIndex}`}
-                ref={mobileFixedVideoRef}
-                src={works[currentWorkIndex]?.scenes?.[currentSceneIndex]?.proxiedVideoUrl ?? works[currentWorkIndex]?.scenes?.[currentSceneIndex]?.videoUrl}
-                poster={works[currentWorkIndex]?.scenes?.[currentSceneIndex]?.thumbnail}
-                loop
-                playsInline
-                preload="auto"
-                controls={false}
-                disablePictureInPicture
-                controlsList="nodownload noplaybackrate noremoteplayback nofullscreen"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  showArrowsForAWhile();
-                  const vid = e.currentTarget;
-                  if (vid.paused) {
-                    vid.play().catch(() => {});
-                  } else {
-                    vid.pause();
-                  }
-                }}
-              />
+              <div 
+                data-work-index={currentWorkIndex}
+                data-scene-index={currentSceneIndex}
+                style={{ width: '100%', height: '100%' }}
+              >
+                <video
+                  key={`player-${currentWorkIndex}-${currentSceneIndex}`}
+                  ref={mobileFixedVideoRef}
+                  src={works[currentWorkIndex]?.scenes?.[currentSceneIndex]?.proxiedVideoUrl ?? works[currentWorkIndex]?.scenes?.[currentSceneIndex]?.videoUrl}
+                  poster={works[currentWorkIndex]?.scenes?.[currentSceneIndex]?.thumbnail}
+                  loop
+                  playsInline
+                  preload="auto"
+                  controls={false}
+                  disablePictureInPicture
+                  controlsList="nodownload noplaybackrate noremoteplayback nofullscreen"
+                  crossOrigin="anonymous"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    showArrowsForAWhile();
+                    const vid = e.currentTarget;
+                    if (vid.paused) {
+                      vid.play().catch(() => {});
+                    } else {
+                      vid.pause();
+                    }
+                  }}
+                />
+              </div>
             </div>
 
             {/* Project navigation - always visible when modal is open */}
@@ -658,6 +708,7 @@ export default function VideoGrid({ works }: VideoGridProps) {
                           preload="metadata"
                           loop
                           muted
+                          crossOrigin="anonymous"
                         />
                       ) : (
                         <div className="project-placeholder">No scenes</div>
@@ -746,6 +797,7 @@ export default function VideoGrid({ works }: VideoGridProps) {
                         'none'
                       }
                       loop
+                      crossOrigin="anonymous"
                     />
                     <button 
                       className="play-pause-button"
