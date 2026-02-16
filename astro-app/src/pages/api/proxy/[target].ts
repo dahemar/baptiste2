@@ -5,7 +5,7 @@ export const prerender = false;
 export function getStaticPaths() { return []; }
 
 // Simple in-memory concurrency limiter and HEAD cache for development
-const MAX_CONCURRENT = 6;
+const MAX_CONCURRENT = 12;
 let currentConcurrent = 0;
 const pendingQueue: Array<() => void> = [];
 
@@ -29,7 +29,7 @@ function releaseSlot() {
   if (next) next();
 }
 
-const HEAD_CACHE_TTL = 30_000; // 30s
+const HEAD_CACHE_TTL = 300_000; // 5 min
 const headCache = new Map<string, { expires: number; status: number; headers: Record<string,string> }>();
 
 function cacheHead(target: string, status: number, headers: Record<string,string>) {
@@ -75,7 +75,7 @@ function base64urlToString(s: string) {
 
 function sleep(ms: number) { return new Promise(resolve => setTimeout(resolve, ms)); }
 
-async function fetchWithRetries(target: string, opts: RequestInit, attempts = 2, timeoutMs = 10000) {
+async function fetchWithRetries(target: string, opts: RequestInit, attempts = 2, timeoutMs = 30000) {
   let lastErr: any = null;
   for (let i = 0; i <= attempts; i++) {
     const controller = new AbortController();
@@ -137,39 +137,24 @@ export const GET: APIRoute = async ({ params, request }) => {
     const upstreamHeaders: Record<string, string> = {};
     if (range) upstreamHeaders['range'] = range;
 
-    // Preflight with HEAD (cached) to fail fast and get headers without downloading body
-    const cached = getCachedHead(target);
-    if (cached) {
-      if (cached.status >= 500) {
-        console.warn('[api/proxy] cached HEAD indicates upstream problem', { target, status: cached.status });
-        return new Response('Upstream unavailable', { status: 502 });
-      }
-    } else {
-      try {
-        const headRes = await fetchWithRetries(target, { method: 'HEAD', redirect: 'follow' }, 1, 5000);
-        const h: Record<string,string> = {};
-        ['content-type','content-length','accept-ranges','last-modified','etag','content-disposition'].forEach(hk => {
-          const v = headRes.headers.get(hk);
-          if (v) h[hk] = v;
-        });
-        cacheHead(target, headRes.status, h);
-        if (!headRes.ok) {
-          console.warn('[api/proxy] upstream HEAD not ok', { target, status: headRes.status });
-          return new Response('Upstream unavailable', { status: 502 });
-        }
-      } catch (e) {
-        console.error('[api/proxy] HEAD preflight failed', e?.message ?? e);
-        return new Response('Upstream unreachable', { status: 502 });
-      }
-    }
-
-    // Use AbortController to avoid hanging for long upstream responses
+    // Skip HEAD preflight — go straight to GET to reduce latency
+    // The HEAD was adding 500ms-1s per request unnecessarily
     await acquireSlot();
     let res;
     try {
-      res = await fetchWithRetries(target, { method: 'GET', redirect: 'follow', headers: upstreamHeaders }, 2, 10000);
+      res = await fetchWithRetries(target, { method: 'GET', redirect: 'follow', headers: upstreamHeaders }, 2, 30000);
     } finally {
       releaseSlot();
+    }
+
+    // Cache HEAD info from the GET response for future HEAD-only requests
+    if (res.ok || res.status === 206) {
+      const h: Record<string,string> = {};
+      ['content-type','content-length','accept-ranges','last-modified','etag','content-disposition'].forEach(hk => {
+        const v = res.headers.get(hk);
+        if (v) h[hk] = v;
+      });
+      cacheHead(target, res.status >= 200 && res.status < 300 ? 200 : res.status, h);
     }
 
     const headers = new Headers();
@@ -180,6 +165,10 @@ export const GET: APIRoute = async ({ params, request }) => {
 
     headers.set('Access-Control-Allow-Origin', '*');
     headers.set('Accept-Ranges', res.headers.get('accept-ranges') || 'bytes');
+    // Cache video chunks in the browser for 24h — assets are immutable release files
+    headers.set('Cache-Control', 'public, max-age=86400, s-maxage=604800, stale-while-revalidate=86400');
+    // Ensure CDN caches different Range responses separately
+    headers.set('Vary', 'Range');
 
     return new Response(res.body, { status: res.status, headers });
   } catch (e: any) {

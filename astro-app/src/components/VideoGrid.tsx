@@ -189,36 +189,63 @@ export default function VideoGrid({ works }: VideoGridProps) {
     const videoElement = document.querySelector(selector) as HTMLVideoElement;
     
     if (videoElement) {
+      // Restore src if it was removed by lazy loading or buffer cleanup
+      if (!videoElement.hasAttribute('src') || !videoElement.src || videoElement.src === window.location.href) {
+        const scene = works[workIdx]?.scenes?.[sceneIdx];
+        if (scene) {
+          videoElement.src = scene.proxiedVideoUrl ?? scene.videoUrl;
+        }
+      }
+
       // If already playing the same video (from useEffect after handleSceneClick), just ensure unmuted
       if (!videoElement.paused && activeVideoRef.current === videoElement) {
         videoElement.muted = false;
         videoElement.volume = 1.0;
         return;
       }
-      try {
-        videoElement.muted = false;
-        videoElement.volume = 1.0;
-        videoElement.currentTime = 0;
-        await videoElement.play();
-        activeVideoRef.current = videoElement;
-      } catch (error) {
-        console.error('Error playing video:', error);
-        // If unmuted play fails due to autoplay policy, try muted first
+
+      // Boost preload for the selected video so it buffers faster
+      videoElement.preload = 'auto';
+
+      const doPlay = async () => {
         try {
-          videoElement.muted = true;
+          videoElement.muted = false;
+          videoElement.volume = 1.0;
           await videoElement.play();
           activeVideoRef.current = videoElement;
-          // Only unmute from user gesture context (otherwise browser blocks it)
-          if (fromUserGesture) {
-            videoElement.muted = false;
-            videoElement.volume = 1.0;
+        } catch (error) {
+          console.error('Error playing video:', error);
+          // If unmuted play fails due to autoplay policy, try muted first
+          try {
+            videoElement.muted = true;
+            await videoElement.play();
+            activeVideoRef.current = videoElement;
+            // Only unmute from user gesture context (otherwise browser blocks it)
+            if (fromUserGesture) {
+              videoElement.muted = false;
+              videoElement.volume = 1.0;
+            }
+          } catch (e2) {
+            console.error('Error playing video (muted fallback):', e2);
           }
-        } catch (e2) {
-          console.error('Error playing video (muted fallback):', e2);
         }
+      };
+
+      // If the video has enough data buffered, play immediately
+      if (videoElement.readyState >= 3) { // HAVE_FUTURE_DATA
+        await doPlay();
+      } else {
+        // Wait for enough data to start playing smoothly
+        const handleCanPlay = () => {
+          videoElement.removeEventListener('canplay', handleCanPlay);
+          doPlay();
+        };
+        videoElement.addEventListener('canplay', handleCanPlay);
+        // Load the video if it hasn't started loading
+        videoElement.load();
       }
     }
-  }, []);
+  }, [works]);
 
   // Handle scene click
   const handleSceneClick = useCallback((workIdx: number, sceneIdx: number) => {
@@ -263,6 +290,54 @@ export default function VideoGrid({ works }: VideoGridProps) {
       pauseAllVideosExcept(null, null);
     }
   }, [isPlaying, currentWorkIndex, currentSceneIndex, pauseAllVideosExcept, playVideo]);
+
+  // Lightweight prefetch: fetch first ~512KB of next scene into browser cache
+  // Much lighter than setting preload='auto' on adjacent video elements
+  useEffect(() => {
+    if (!isPlaying) return;
+    const work = works[currentWorkIndex];
+    if (!work) return;
+
+    const nextIdx = currentSceneIndex + 1;
+    if (nextIdx >= work.scenes.length) return;
+
+    const nextScene = work.scenes[nextIdx];
+    const nextUrl = nextScene?.proxiedVideoUrl ?? nextScene?.videoUrl;
+    if (!nextUrl) return;
+
+    // Fetch first 512KB with Range header to warm browser cache
+    const controller = new AbortController();
+    fetch(nextUrl, {
+      headers: { Range: 'bytes=0-524287' },
+      signal: controller.signal,
+    }).catch(() => {}); // Ignore errors — this is best-effort
+
+    return () => controller.abort();
+  }, [isPlaying, currentWorkIndex, currentSceneIndex, works]);
+
+  // Release video buffers from distant works when switching works
+  // React removes src for distant works (lazy src), but we need to force
+  // the browser to actually release the buffered data via load()
+  useEffect(() => {
+    const cleanup = () => {
+      const allVideos = document.querySelectorAll('.scene-item video') as NodeListOf<HTMLVideoElement>;
+      allVideos.forEach((video) => {
+        // If React removed the src (distant work) but the video still has data buffered
+        if (!video.hasAttribute('src') && video.readyState > 0) {
+          video.load(); // Force the browser to release buffered data
+        }
+      });
+    };
+
+    // Defer cleanup to avoid interfering with current playback start
+    if ('requestIdleCallback' in window) {
+      const id = (window as any).requestIdleCallback(cleanup, { timeout: 2000 });
+      return () => (window as any).cancelIdleCallback(id);
+    } else {
+      const id = setTimeout(cleanup, 500);
+      return () => clearTimeout(id);
+    }
+  }, [currentWorkIndex]);
 
   useEffect(() => {
     if (!isMobile || !mobileFixedVideoRef.current) return;
@@ -635,11 +710,18 @@ export default function VideoGrid({ works }: VideoGridProps) {
                     onMouseLeave={() => setHoveredScene(null)}
                   >
                     <video
-                      src={scene.proxiedVideoUrl ?? scene.videoUrl}
+                      src={
+                        Math.abs(workIdx - currentWorkIndex) <= 1
+                          ? (scene.proxiedVideoUrl ?? scene.videoUrl)
+                          : undefined
+                      }
                       poster={scene.thumbnail}
                       playsInline
-                      // Preload metadata for the current work and its nearby neighbours
-                      preload={Math.abs(workIdx - currentWorkIndex) <= 2 ? 'metadata' : 'none'}
+                      preload={
+                        workIdx === currentWorkIndex && sceneIdx === currentSceneIndex ? 'auto' :
+                        workIdx === currentWorkIndex && Math.abs(sceneIdx - currentSceneIndex) <= 1 ? 'metadata' :
+                        'none'
+                      }
                       loop
                     />
                     <button 
