@@ -364,9 +364,14 @@ function parseTheatreWorks(rawValues: string[][]): any[] {
     }
 
     // If thumbnail is a remote URL, rewrite to dev thumbnail proxy so thumbnails load fast and can be cached locally
+    // Skip proxy for R2 URLs (they are already fast and have proper CORS)
     if (thumb && typeof thumb === 'string' && thumb.startsWith('http')) {
       try {
-        thumb = `/api/thumb/${encodeURIComponent(thumb)}`;
+        const thumbUrl = new URL(thumb);
+        // Only proxy GitHub/S3 thumbnails, not R2
+        if (!thumbUrl.hostname.includes('r2.dev')) {
+          thumb = `/api/thumb/${encodeURIComponent(thumb)}`;
+        }
       } catch (e) {
         // ignore
       }
