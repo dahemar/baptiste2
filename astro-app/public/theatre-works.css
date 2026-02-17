@@ -697,6 +697,7 @@ body {
 @media (max-width: 768px) {
   .mobile-fixed-player .credits-panel {
     background-color: #2a2a2a;
+    padding-bottom: calc(136px + env(safe-area-inset-bottom)); /* +20px reales en el panel móvil */
   }
 
   .mobile-fixed-player .credits-panel .credits-project-nav {
@@ -1130,10 +1131,27 @@ body {
   }
 }
 
-/* Player mode: fade out nav and reclaim space */
+/* Player mode: keep nav background immediate; animate only labels */
 body.player-mode-active .main-nav {
-  opacity: 0;
+  opacity: 1;
   pointer-events: none;
+  transition: none;
+}
+
+@media (max-width: 768px) {
+  .main-nav .nav-link {
+    transition: opacity 0.16s ease, filter 0.16s ease, color 0.2s ease;
+  }
+
+  body.player-mode-active .main-nav .nav-link {
+    opacity: 0;
+    filter: blur(2px);
+  }
+
+  body:not(.player-mode-active) .main-nav .nav-link {
+    opacity: 1;
+    filter: blur(0);
+  }
 }
 
 body.player-mode-active .main-content {
