@@ -1,141 +1,64 @@
 ---
----
-<!doctype html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>OK</title>
-  </head>
-  <body>
-    <h1>OK</h1>
-  </body>
-</html>
----
+import sheetsManager from '../utils/googleSheetsManager';
+import VideoGrid from '../components/VideoGrid';
 
+// Load theatre works data at build time or on-demand
+let works = [];
+try {
+  console.log('[theatre-works] calling loadTheatreWorksData');
+  works = await sheetsManager.loadTheatreWorksData();
+  console.log('[theatre-works] loadTheatreWorksData returned', Array.isArray(works) ? works.length : typeof works);
+} catch (e) {
+  console.error('[theatre-works] loadTheatreWorksData error', e?.stack ?? e);
+  works = [];
+}
+const totalVideos = works.reduce((sum, work) => sum + work.scenes.length, 0);
+
+// Parse credits from works (simplificado para ahora)
+const currentWork = works.length > 0 ? works[0] : null;
+const credits = currentWork?.credits ? [
+  { role: 'Credits', name: currentWork.credits }
+] : [];
 ---
 
 <html lang="es">
-	<head>
-		<meta charset="utf-8" />
-		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-		<meta name="viewport" content="width=device-width" />
-		<meta name="generator" content={Astro.generator} />
-		<title>Baptiste Le Chapelain</title>
-		<style>
-			* {
-				margin: 0;
-				padding: 0;
-				box-sizing: border-box;
-			}
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="stylesheet" href="/theatre-works.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Baptiste Le Chapelain</title>
+    <style>
+      @import '../components/CreditsPanel.css';
+      @import '../components/VUMeter.css';
+    </style>
+  </head>
+  <body>
+    <nav class="main-nav">
+      <div class="nav-container">
+        <div class="nav-links">
+          <a href="/" class="nav-link home-link active" aria-label="theatre"><span class="desktop-label">music for theatre</span><span class="mobile-label">theatre</span></a>
+          <a href="/music" class="nav-link">music</a>
+          <a href="/audiovisual" class="nav-link">audiovisual</a>
+          <a href="/contact" class="nav-link">contact</a>
+        </div>
+      </div>
+    </nav>
 
-			body {
-				font-family: system-ui, -apple-system, sans-serif;
-				background: #0a0a0a;
-				color: #fff;
-				min-height: 100vh;
-				display: flex;
-				align-items: center;
-				justify-content: center;
-				flex-direction: column;
-				text-align: center;
-				padding: 2rem;
-			}
-
-			h1 {
-				font-size: 3rem;
-				margin-bottom: 1rem;
-				background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-				-webkit-background-clip: text;
-				-webkit-text-fill-color: transparent;
-				background-clip: text;
-			}
-
-			p {
-				color: #999;
-				margin-bottom: 2rem;
-				font-size: 1.2rem;
-			}
-
-			nav {
-				display: flex;
-				gap: 1rem;
-				flex-wrap: wrap;
-				justify-content: center;
-			}
-
-			a {
-				background: #1a1a1a;
-				color: #fff;
-				padding: 1rem 2rem;
-				text-decoration: none;
-				border-radius: 8px;
-				border: 1px solid #333;
-				transition: all 0.3s ease;
-			}
-
-			a:hover {
-				background: #2a2a2a;
-				border-color: #667eea;
-				transform: translateY(-2px);
-			}
-
-			.info {
-				margin-top: 3rem;
-				padding: 2rem;
-				background: #1a1a1a;
-				border-radius: 12px;
-				max-width: 600px;
-				border: 1px solid #333;
-			}
-
-			.info h2 {
-				font-size: 1.5rem;
-				margin-bottom: 1rem;
-				color: #667eea;
-			}
-
-			.info ul {
-				text-align: left;
-				list-style: none;
-				color: #ccc;
-			}
-
-			.info li {
-				padding: 0.5rem 0;
-				border-bottom: 1px solid #2a2a2a;
-			}
-
-			.info li:last-child {
-				border-bottom: none;
-			}
-
-			.info li::before {
-				content: "✓ ";
-				color: #667eea;
-				font-weight: bold;
-				margin-right: 0.5rem;
-			}
-		</style>
-	</head>
-	<body>
-		<h1>APULATI</h1>
-		<p>Sound Design for Theatre - Astro Edition</p>
-		
-		<nav>
-			<a href="/theatre-works">Theatre Works</a>
-		</nav>
-
-		<div class="info">
-			<h2>🚀 Migración a Astro Completada</h2>
-			<ul>
-				<li>VideoPlayer optimizado con islands</li>
-				<li>Lazy loading con client:visible</li>
-				<li>HLS solo bajo demanda</li>
-				<li>Sin duplicación de assets</li>
-				<li>Gestión mejorada de recursos de video</li>
-				<li>TypeScript y React integrados</li>
-			</ul>
-		</div>
-	</body>
+    <div class="theatre-works">
+      <div class="fixed-viewer">
+        <div class="viewer-container">
+          <div class="video-section full-width">
+            {works.length === 0 ? (
+              <div class="loading">
+                <p>No works found</p>
+              </div>
+            ) : (
+              <VideoGrid works={works} client:only="react" />
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
 </html>

@@ -1,6 +1,1 @@
-{
-  "outputDirectory": "astro-app/dist",
-  "redirects": [
-    { "source": "/", "destination": "/theatre-works", "permanent": true }
-  ]
-}
+{}

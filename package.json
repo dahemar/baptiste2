@@ -6,9 +6,13 @@
     "node": ">=20.0.0 <23.0.0"
   },
   "scripts": {
-    "build": "cd astro-app && npm ci && npm run build",
+    "build": "cd astro-app && npm ci && npm run build && cp -r .vercel ../",
     "dev": "cd astro-app && npm ci && npm run dev",
-    "preview": "cd astro-app && npm ci && npm run preview"
+    "preview": "cd astro-app && npm ci && npm run preview",
+    "r2:check": "scripts/check-r2-setup.sh",
+    "r2:migrate": "scripts/migrate-to-r2.sh",
+    "r2:update-csv": "node scripts/update-csv-for-r2.js",
+    "r2:verify": "node scripts/verify-r2-migration.js"
   }
 }
 

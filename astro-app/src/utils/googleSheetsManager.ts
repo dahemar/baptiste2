@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import * as fsSync from 'node:fs';
+import crypto from 'node:crypto';
 
 const CACHE_PATH = path.resolve(process.cwd(), '.cache/theatre-works.json');
 
@@ -36,7 +37,10 @@ export function clearMemoryCache() {
 export async function fetchFromGoogleSheets(): Promise<any[]> {
   const CACHE_KEY = 'theatreWorks';
   // Return cached value if present
-  if (cache.has(CACHE_KEY)) return cache.get(CACHE_KEY);
+  if (cache.has(CACHE_KEY)) {
+    const cached = cache.get(CACHE_KEY);
+    if (Array.isArray(cached) && cached.length > 0) return cached;
+  }
 
   let rows: any[] | null = null;
 
@@ -105,9 +109,43 @@ export async function fetchFromGoogleSheets(): Promise<any[]> {
     }
   }
 
+  // 2b) Fallback: try loading from local CSV file if Google Sheets returned nothing
   if (!Array.isArray(rows) || rows.length === 0) {
-    console.warn('fetchFromGoogleSheets: no rows obtained from Google Sheets');
-    cache.set(CACHE_KEY, []);
+    console.log('fetchFromGoogleSheets: trying local CSV fallback');
+    const csvPaths = [
+      path.resolve(process.cwd(), 'data', 'theatre-works.csv'),
+      path.resolve(process.cwd(), 'data', 'theatre-works.csv.backup'),
+      path.resolve(process.cwd(), 'astro-app', 'data', 'theatre-works.csv'),
+      path.resolve(process.cwd(), 'astro-app', 'data', 'theatre-works.csv.backup'),
+      path.resolve(process.cwd(), '..', 'astro-app', 'data', 'theatre-works.csv'),
+      path.resolve(process.cwd(), '..', 'astro-app', 'data', 'theatre-works.csv.backup'),
+      path.resolve(process.cwd(), 'baptiste-theatre_works-updated.csv'),
+      path.resolve(process.cwd(), 'baptiste-theatre_works-releases.csv'),
+    ];
+    for (const csvPath of csvPaths) {
+      try {
+        if (!fsSync.existsSync(csvPath)) continue;
+        const csvContent = await fs.readFile(csvPath, 'utf-8');
+        const csvRows = csvContent.split('\n')
+          .map(line => line.replace(/\r$/, ''))
+          .filter(line => line.trim().length > 0)
+          .map(line => {
+            // Simple CSV split - handle fields but none of ours contain commas
+            return line.split(',').map(f => f.trim());
+          });
+        if (csvRows.length > 0) {
+          rows = csvRows;
+          console.log(`fetchFromGoogleSheets: loaded ${rows.length} rows from CSV fallback: ${csvPath}`);
+          break;
+        }
+      } catch (e) {
+        console.warn(`fetchFromGoogleSheets: failed to read CSV ${csvPath}`, (e as any)?.message ?? e);
+      }
+    }
+  }
+
+  if (!Array.isArray(rows) || rows.length === 0) {
+    console.warn('fetchFromGoogleSheets: no rows obtained from any source');
     try { await saveToCache([]); } catch {}
     return [];
   }
@@ -332,16 +370,37 @@ function parseTheatreWorks(rawValues: string[][]): any[] {
       console.log('[parseTheatreWorks] derived thumbnail from video', { workId: s.workId, sceneId, derived });
     }
 
+    // If thumbnail is a remote URL, rewrite to dev thumbnail proxy so thumbnails load fast and can be cached locally
+    // Skip proxy for R2 URLs (they are already fast and have proper CORS)
+    if (thumb && typeof thumb === 'string' && thumb.startsWith('http')) {
+      try {
+        const thumbUrl = new URL(thumb);
+        // Only proxy GitHub/S3 thumbnails, not R2
+        if (!thumbUrl.hostname.includes('r2.dev')) {
+          thumb = `/api/thumb/${encodeURIComponent(thumb)}`;
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+
     // Provide an optional proxied video URL for hosts that block CORS so dev can proxy through the server
     let proxiedVideoUrl: string | undefined = undefined;
     try {
       const u = new URL(videoUrl);
-      if (['github.com', 'release-assets.githubusercontent.com'].includes(u.hostname) || u.hostname.endsWith('.s3.amazonaws.com')) {
-        proxiedVideoUrl = `/api/proxy?url=${encodeURIComponent(videoUrl)}`;
+      if (
+        ['github.com', 'release-assets.githubusercontent.com'].includes(u.hostname) ||
+        u.hostname.endsWith('.s3.amazonaws.com') ||
+        u.hostname.endsWith('.r2.dev')
+      ) {
+        // Use path-encoded form to avoid query parsing issues in dev proxy
+        proxiedVideoUrl = `/api/proxy/${encodeURIComponent(videoUrl)}`;
       }
     } catch {}
 
-    work.scenes.push({ id: `${s.workId}-scene-${work.scenes.length}`, videoUrl, proxiedVideoUrl, thumbnail: thumb });
+    // Prefer proxied path URL as the canonical `videoUrl` so client-side uses the safe form
+    const canonicalVideoUrl = proxiedVideoUrl ?? videoUrl;
+    work.scenes.push({ id: `${s.workId}-scene-${work.scenes.length}`, videoUrl: canonicalVideoUrl, proxiedVideoUrl, thumbnail: thumb });
   }
 
   for (const [workId, cs] of credits.entries()) {
@@ -450,4 +509,120 @@ function deriveThumbnailFromVideoUrl(videoUrl: string): string | undefined {
     // ignore and fallback
   }
   return undefined;
+}
+
+// Convenience wrapper expected by older code: load theatre works from cache then Google Sheets
+export async function loadTheatreWorksData(options?: { force?: boolean }) {
+  const force = !!(options && options.force);
+
+  if (!force) {
+    try {
+      const cached = await loadFromCache();
+      if (Array.isArray(cached) && cached.length > 0) {
+        // Check if cache is stale: scenes should have proxiedVideoUrl and thumbnail
+        const firstScene = cached[0]?.scenes?.[0];
+        const hasR2WithoutProxy = !!(
+          firstScene &&
+          typeof firstScene.videoUrl === 'string' &&
+          firstScene.videoUrl.includes('.r2.dev') &&
+          !firstScene.proxiedVideoUrl
+        );
+        const isStale = (firstScene && !firstScene.proxiedVideoUrl && !firstScene.thumbnail) || hasR2WithoutProxy;
+        if (isStale) {
+          console.warn('loadTheatreWorksData: cache appears stale (no proxiedVideoUrl/thumbnail), forcing refresh');
+        } else {
+          return cached;
+        }
+      }
+    } catch (e) {
+      console.warn('loadTheatreWorksData: loadFromCache failed', (e as any)?.message ?? e);
+    }
+  }
+
+  try {
+    const fetched = await fetchFromGoogleSheets();
+    if (Array.isArray(fetched) && fetched.length > 0) return fetched;
+  } catch (e) {
+    console.warn('loadTheatreWorksData: fetchFromGoogleSheets failed', (e as any)?.message ?? e);
+  }
+
+  // Background: prefetch thumbnails for any remote thumb entries in cache
+  try {
+    const maybeCached = await loadFromCache();
+    if (Array.isArray(maybeCached) && maybeCached.length > 0) {
+      setTimeout(() => {
+        void prefetchThumbnails(maybeCached);
+      }, 1000);
+    }
+  } catch (e) {
+    // ignore
+  }
+
+  // Final fallback to cache (may be empty array)
+  try {
+    const fallback = await loadFromCache();
+    if (Array.isArray(fallback)) return fallback;
+  } catch (e) {
+    // ignore
+  }
+
+  return [];
+}
+
+const defaultExport = {
+  loadTheatreWorksData,
+  loadFromCache,
+  saveToCache,
+  fetchFromGoogleSheets,
+  clearMemoryCache,
+};
+
+export default defaultExport;
+
+async function prefetchThumbnails(works: any[]) {
+  try {
+    const CACHE_DIR = path.resolve(process.cwd(), '.cache', 'thumbs');
+    await fs.mkdir(CACHE_DIR, { recursive: true });
+    const tasks: string[] = [];
+    for (const w of works) {
+      for (const s of (w.scenes || [])) {
+        const t = s.thumbnail;
+        if (!t) continue;
+        // thumbnails rewritten to /api/thumb/<encoded> for remote URLs
+        if (typeof t === 'string' && t.startsWith('/api/thumb/')) {
+          const enc = t.replace('/api/thumb/', '');
+          let remote: string;
+          try { remote = decodeURIComponent(enc); } catch { remote = enc; }
+          tasks.push(remote);
+        }
+      }
+    }
+
+    const unique = Array.from(new Set(tasks));
+    const CONC = 4;
+    for (let i = 0; i < unique.length; i += CONC) {
+      const batch = unique.slice(i, i + CONC).map(async (remote) => {
+        try {
+          const ext = (path.extname(new URL(remote).pathname) || '').replace(/^\./, '') || 'jpg';
+          const fname = crypto.createHash('sha1').update(remote).digest('hex') + '.' + ext;
+          const filePath = path.join(CACHE_DIR, fname);
+          if (fsSync.existsSync(filePath)) return;
+          const controller = new AbortController();
+          const to = setTimeout(() => controller.abort(), 7000);
+          const res = await fetch(remote, { signal: controller.signal, redirect: 'follow' }).catch(() => null);
+          clearTimeout(to);
+          if (!res || !res.ok) return;
+          const ab = await res.arrayBuffer().catch(() => null);
+          if (!ab) return;
+          await fs.writeFile(filePath + '.tmp', Buffer.from(ab));
+          try { await fs.rename(filePath + '.tmp', filePath); } catch (e) { /* ignore */ }
+        } catch (e) {
+          // ignore individual failures
+        }
+      });
+      await Promise.allSettled(batch);
+    }
+  } catch (e) {
+    // ignore
+  }
 }

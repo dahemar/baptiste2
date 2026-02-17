@@ -1,79 +1,22 @@
 ---
 import '../styles/music.css';
+import { loadMusicData } from '../utils/sectionContentManager';
 
-// Load images lazily during dev to avoid eager bundling overhead at startup
 const images = import.meta.glob('../assets/music/*.{jpg,jpeg,png,webp}', {
-  eager: false,
+  eager: true,
   query: '?url',
   import: 'default'
 });
 
-const releases = [
-  { 
-    key: 'oo.ne.jpg', 
-    title: 'OO:NÉ', 
-    format: 'cassette (lp)',
-    year: '2017',
-    type: 'album',
-    url: 'https://www.discogs.com/release/10275611-Apulati-Bien-OON%C3%89'
-  },
-  { 
-    key: 'exvivo.jpg', 
-    title: 'Exvivo', 
-    format: 'cassette (lp)',
-    year: '2023',
-    type: 'album',
-    url: 'https://www.discogs.com/release/28599484-Apulati-Bien-Exvivo'
-  },
-  { 
-    key: 'dap.jpg', 
-    title: "D'ap", 
-    format: 'cassette (ep)',
-    year: '2018',
-    type: 'ep',
-    url: 'https://www.discogs.com/fr/artist/5751087-Apulati-Bien?superFilter=Releases'
-  },
-  { 
-    key: 'rertracks.jpg', 
-    title: 'RER TRACKS', 
-    format: 'cassette (ep)',
-    year: '2020',
-    type: 'ep',
-    url: 'https://www.discogs.com/release/16299626-Apulati-Bien-RER-TRACKS'
-  },
-  { 
-    key: 'crapulati.jpg', 
-    title: 'Crapulati 1', 
-    format: 'cassette (ep)',
-    year: '2020',
-    type: 'ep',
-    url: 'https://www.discogs.com/fr/artist/5751087-Apulati-Bien?superFilter=Releases'
-  },
-  { 
-    key: 'azone.jpg', 
-    title: 'Azone', 
-    format: 'vinyl (green, lp)',
-    year: '2022',
-    type: 'album',
-    url: 'https://www.discogs.com/release/22154026-Apulati-Bien-Azone'
-  },
-  { 
-    key: 'nonmasse.jpg', 
-    title: 'Non Masse', 
-    format: 'vinyl (lp)',
-    year: '2023',
-    type: 'album',
-    url: 'https://www.discogs.com/release/26407793-Apulati-Bien-Non-Masse'
-  },
-  { 
-    key: 'ultimate.jpg', 
-    title: 'Ultimate Best Of Live', 
-    format: 'cassette (compilation)',
-    year: '2021',
-    type: 'compilation',
-    url: 'https://www.discogs.com/release/21105961-Apulati-Bien-Ultimate-Best-Of-Live'
-  }
-];
+let allReleasesUrl = 'https://www.discogs.com/fr/artist/5751087-Apulati-Bien?superFilter=Releases';
+let releases = [];
+try {
+  const data = await loadMusicData();
+  allReleasesUrl = data.allReleasesUrl || allReleasesUrl;
+  releases = data.releases || [];
+} catch {
+  releases = [];
+}
 
 const normalizeKey = (path: string) => {
   return path.split('/').pop() || '';
@@ -81,7 +24,7 @@ const normalizeKey = (path: string) => {
 
 const entries = Object.entries(images).map(([path, src]) => {
   const key = normalizeKey(path);
-  const found = releases.find(r => r.key === key);
+  const found = releases.find(r => r.coverKey === key);
   return {
     key,
     src: typeof src === 'string' ? src : '',
@@ -89,13 +32,27 @@ const entries = Object.entries(images).map(([path, src]) => {
     format: found?.format || '',
     year: found?.year || '',
     type: found?.type || 'other',
-    url: found?.url || 'https://www.discogs.com/fr/artist/5751087-Apulati-Bien?superFilter=Releases'
+    url: found?.url || allReleasesUrl
   };
 });
 
-const albums = entries.filter(item => item.type === 'album').sort((a, b) => Number(a.year) - Number(b.year));
-const eps = entries.filter(item => item.type === 'ep').sort((a, b) => Number(a.year) - Number(b.year));
-const compilations = entries.filter(item => item.type === 'compilation').sort((a, b) => Number(a.year) - Number(b.year));
+const externalOnlyEntries = releases
+  .filter((item) => !!item.coverUrl && !entries.some((entry) => entry.key === item.coverKey))
+  .map((item) => ({
+    key: item.coverKey || item.id,
+    src: item.coverUrl || '',
+    title: item.title,
+    format: item.format,
+    year: item.year,
+    type: item.type || 'other',
+    url: item.url || allReleasesUrl,
+  }));
+
+const mergedEntries = [...entries, ...externalOnlyEntries];
+
+const albums = mergedEntries.filter(item => item.type === 'album').sort((a, b) => Number(a.year) - Number(b.year));
+const eps = mergedEntries.filter(item => item.type === 'ep').sort((a, b) => Number(a.year) - Number(b.year));
+const compilations = mergedEntries.filter(item => item.type === 'compilation').sort((a, b) => Number(a.year) - Number(b.year));
 ---
 
 <!DOCTYPE html>
@@ -110,7 +67,7 @@ const compilations = entries.filter(item => item.type === 'compilation').sort((a
   <nav class="main-nav">
     <div class="nav-container">
       <div class="nav-links">
-        <a href="/theatre-works" class="nav-link home-link" aria-label="theatre"><span class="desktop-label">music for theatre</span><span class="mobile-label">theatre</span></a>
+        <a href="/" class="nav-link home-link" aria-label="theatre"><span class="desktop-label">music for theatre</span><span class="mobile-label">theatre</span></a>
         <a href="/music" class="nav-link active">music</a>
         <a href="/audiovisual" class="nav-link">audiovisual</a>
         <a href="/contact" class="nav-link">contact</a>
@@ -121,7 +78,7 @@ const compilations = entries.filter(item => item.type === 'compilation').sort((a
   <div class="music-page">
     <a
       class="music-discogs-link"
-      href="https://www.discogs.com/fr/artist/5751087-Apulati-Bien?superFilter=Releases"
+      href={allReleasesUrl}
       target="_blank"
       rel="noreferrer"
     >
