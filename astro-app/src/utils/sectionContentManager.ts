@@ -118,6 +118,18 @@ async function tryFetchSheetRange(range: string): Promise<string[][] | null> {
   }
 }
 
+async function tryFetchFirstAvailableRange(rangeCandidates: string[]): Promise<string[][] | null> {
+  for (const candidate of rangeCandidates) {
+    const range = String(candidate || '').trim();
+    if (!range) continue;
+    const rows = await tryFetchSheetRange(range);
+    if (rows && rows.length > 1) {
+      return rows;
+    }
+  }
+  return null;
+}
+
 async function tryFetchCsvUrl(url?: string): Promise<string[][] | null> {
   if (!url) return null;
   const controller = new AbortController();
@@ -158,7 +170,7 @@ async function tryReadLocalCsv(fileName: string): Promise<string[][] | null> {
 
 async function loadSectionRows(options: {
   cacheKey: string;
-  rangeName: string;
+  rangeNames: string[];
   csvUrlEnvVar: string;
   localFileName: string;
 }): Promise<Row[]> {
@@ -166,7 +178,7 @@ async function loadSectionRows(options: {
     return memoryCache.get(options.cacheKey) as Row[];
   }
 
-  let rows = await tryFetchSheetRange(options.rangeName);
+  let rows = await tryFetchFirstAvailableRange(options.rangeNames);
   if (!rows) {
     rows = await tryFetchCsvUrl(process.env[options.csvUrlEnvVar]);
   }
@@ -180,9 +192,18 @@ async function loadSectionRows(options: {
 }
 
 export async function loadMusicData(): Promise<{ allReleasesUrl: string; releases: MusicRelease[] }> {
+  const envRange = process.env.MUSIC_SHEET_RANGE;
   const rows = await loadSectionRows({
     cacheKey: 'music',
-    rangeName: 'MUSIC',
+    rangeNames: [
+      envRange || '',
+      'MUSIC',
+      'music',
+      'Music',
+      'baptiste - music',
+      'Baptiste - Music',
+      'music.csv',
+    ],
     csvUrlEnvVar: 'MUSIC_CSV_URL',
     localFileName: 'music.csv',
   });
@@ -208,9 +229,18 @@ export async function loadMusicData(): Promise<{ allReleasesUrl: string; release
 }
 
 export async function loadAudiovisualData(): Promise<AudiovisualWork[]> {
+  const envRange = process.env.AUDIOVISUAL_SHEET_RANGE;
   const rows = await loadSectionRows({
     cacheKey: 'audiovisual',
-    rangeName: 'AUDIOVISUAL',
+    rangeNames: [
+      envRange || '',
+      'AUDIOVISUAL',
+      'audiovisual',
+      'Audiovisual',
+      'baptiste - audiovisual',
+      'Baptiste - Audiovisual',
+      'audiovisual.csv',
+    ],
     csvUrlEnvVar: 'AUDIOVISUAL_CSV_URL',
     localFileName: 'audiovisual.csv',
   });

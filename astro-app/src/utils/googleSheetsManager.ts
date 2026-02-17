@@ -34,6 +34,97 @@ export function clearMemoryCache() {
   cache.delete(CACHE_KEY);
 }
 
+function parseCsvLine(line: string): string[] {
+  const out: string[] = [];
+  let current = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    const next = line[i + 1];
+
+    if (char === '"') {
+      if (inQuotes && next === '"') {
+        current += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+
+    if (char === ',' && !inQuotes) {
+      out.push(current.trim());
+      current = '';
+      continue;
+    }
+
+    current += char;
+  }
+
+  out.push(current.trim());
+  return out;
+}
+
+async function readCsvRows(filePath: string): Promise<string[][]> {
+  const csvContent = await fs.readFile(filePath, 'utf-8');
+  return csvContent
+    .split('\n')
+    .map(line => line.replace(/\r$/, ''))
+    .filter(line => line.trim().length > 0)
+    .map(line => parseCsvLine(line));
+}
+
+async function loadSimplifiedTheatreRowsFromCsv(): Promise<string[][] | null> {
+  const dataDirs = [
+    path.resolve(process.cwd(), 'data'),
+    path.resolve(process.cwd(), 'astro-app', 'data'),
+    path.resolve(process.cwd(), '..', 'astro-app', 'data'),
+  ];
+
+  for (const dir of dataDirs) {
+    const worksPath = path.join(dir, 'theatre-works-works.csv');
+    const scenesPath = path.join(dir, 'theatre-works-scenes.csv');
+    const creditsPath = path.join(dir, 'theatre-works-credits.csv');
+
+    if (!fsSync.existsSync(worksPath) || !fsSync.existsSync(scenesPath)) {
+      continue;
+    }
+
+    try {
+      const combined: string[][] = [];
+      const worksRows = await readCsvRows(worksPath);
+      if (worksRows.length > 0) {
+        combined.push(['WORKS', ...(worksRows[0] || [])]);
+        for (const row of worksRows.slice(1)) combined.push(['WORKS', ...row]);
+      }
+
+      const scenesRows = await readCsvRows(scenesPath);
+      if (scenesRows.length > 0) {
+        combined.push(['SCENES', ...(scenesRows[0] || [])]);
+        for (const row of scenesRows.slice(1)) combined.push(['SCENES', ...row]);
+      }
+
+      if (fsSync.existsSync(creditsPath)) {
+        const creditsRows = await readCsvRows(creditsPath);
+        if (creditsRows.length > 0) {
+          combined.push(['CREDITS', ...(creditsRows[0] || [])]);
+          for (const row of creditsRows.slice(1)) combined.push(['CREDITS', ...row]);
+        }
+      }
+
+      if (combined.length > 0) {
+        console.log(`fetchFromGoogleSheets: loaded simplified theatre CSV set from ${dir}`);
+        return combined;
+      }
+    } catch (e) {
+      console.warn(`fetchFromGoogleSheets: failed simplified CSV set in ${dir}`, (e as any)?.message ?? e);
+    }
+  }
+
+  return null;
+}
+
 export async function fetchFromGoogleSheets(): Promise<any[]> {
   const CACHE_KEY = 'theatreWorks';
   // Return cached value if present
@@ -58,6 +149,63 @@ export async function fetchFromGoogleSheets(): Promise<any[]> {
     const SHEET_ID = process.env.THEATRE_SHEET_ID ?? '15S6aAhOP-p20BuDP-UEdGkSoTk8ScMkHR9cnGsmlLHI';
     const API_KEY = process.env.GOOGLE_SHEETS_API_KEY ?? process.env.GOOGLE_API_KEY;
     if (API_KEY) {
+      const batchGetCombinedRows = async (ranges: string[]) => {
+        const qs = ranges.map(r => `ranges=${encodeURIComponent(r)}`).join('&');
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values:batchGet?${qs}&key=${API_KEY}`;
+        const controller = new AbortController();
+        const t = setTimeout(() => controller.abort(), 10000);
+        try {
+          const res = await fetch(url, { signal: controller.signal });
+          if (!res.ok) return [] as any[];
+          const data = await res.json();
+          const valueRanges = Array.isArray(data?.valueRanges) ? data.valueRanges : [];
+          const combined: any[] = [];
+          for (let i = 0; i < ranges.length; i++) {
+            const rangeName = ranges[i];
+            const vr = valueRanges[i];
+            const vals = Array.isArray(vr?.values) ? vr.values : [];
+            if (vals.length === 0) continue;
+
+            const upper = String(rangeName).toUpperCase();
+            const sectionName = upper.includes('WORK')
+              ? 'WORKS'
+              : upper.includes('SCENE')
+                ? 'SCENES'
+                : upper.includes('CREDIT')
+                  ? 'CREDITS'
+                  : upper;
+
+            const hdr = Array.isArray(vals[0]) ? vals[0] : [vals[0]];
+            combined.push([sectionName, ...(hdr || [])]);
+            for (let r = 1; r < vals.length; r++) {
+              const row = Array.isArray(vals[r]) ? vals[r] : [vals[r]];
+              combined.push([sectionName, ...row]);
+            }
+          }
+          return combined;
+        } catch {
+          return [] as any[];
+        } finally {
+          clearTimeout(t);
+        }
+      };
+
+      // 2a) Preferred human-friendly schema first (easy manual edits with direct R2 URLs)
+      const humanRanges = [
+        process.env.THEATRE_WORKS_RANGE || 'THEATRE_WORKS',
+        process.env.THEATRE_SCENES_RANGE || 'THEATRE_SCENES',
+        process.env.THEATRE_CREDITS_RANGE || 'THEATRE_CREDITS',
+        'theatre_works_works',
+        'theatre_works_scenes',
+        'theatre_works_credits',
+      ];
+      const humanCombined = await batchGetCombinedRows(humanRanges);
+      if (humanCombined.length > 0) {
+        rows = humanCombined;
+      }
+
+      // 2b) Legacy structured ranges fallback
+      if (!Array.isArray(rows) || rows.length === 0) {
       // Attempt to fetch structured ranges for sections (WORKS, SCENES, VIDEOS, THUMBNAILS, AUDIO, CREDITS)
       const ranges = ['WORKS', 'SCENES', 'VIDEOS', 'THUMBNAILS', 'AUDIO', 'CREDITS'];
       const qs = ranges.map(r => `ranges=${encodeURIComponent(r)}`).join('&');
@@ -103,6 +251,7 @@ export async function fetchFromGoogleSheets(): Promise<any[]> {
       } finally {
         clearTimeout(t);
       }
+      }
     } else {
       // No API key available
       rows = [];
@@ -112,6 +261,9 @@ export async function fetchFromGoogleSheets(): Promise<any[]> {
   // 2b) Fallback: try loading from local CSV file if Google Sheets returned nothing
   if (!Array.isArray(rows) || rows.length === 0) {
     console.log('fetchFromGoogleSheets: trying local CSV fallback');
+
+    rows = await loadSimplifiedTheatreRowsFromCsv();
+
     const csvPaths = [
       path.resolve(process.cwd(), 'data', 'theatre-works.csv'),
       path.resolve(process.cwd(), 'data', 'theatre-works.csv.backup'),
@@ -123,16 +275,10 @@ export async function fetchFromGoogleSheets(): Promise<any[]> {
       path.resolve(process.cwd(), 'baptiste-theatre_works-releases.csv'),
     ];
     for (const csvPath of csvPaths) {
+      if (Array.isArray(rows) && rows.length > 0) break;
       try {
         if (!fsSync.existsSync(csvPath)) continue;
-        const csvContent = await fs.readFile(csvPath, 'utf-8');
-        const csvRows = csvContent.split('\n')
-          .map(line => line.replace(/\r$/, ''))
-          .filter(line => line.trim().length > 0)
-          .map(line => {
-            // Simple CSV split - handle fields but none of ours contain commas
-            return line.split(',').map(f => f.trim());
-          });
+        const csvRows = await readCsvRows(csvPath);
         if (csvRows.length > 0) {
           rows = csvRows;
           console.log(`fetchFromGoogleSheets: loaded ${rows.length} rows from CSV fallback: ${csvPath}`);
@@ -209,31 +355,54 @@ function parseTheatreWorks(rawValues: string[][]): any[] {
   const scenes = new Map<string, any>();
   const videos = new Map<string, string>();
   const thumbnails = new Map<string, string>();
-  const audio = new Map<string, string>();
   const credits = new Map<string, any[]>();
   const sectionHeaders: Record<string, string[]> = {};
 
   let currentSection = '';
-  const isNumeric = (s: any) => typeof s === 'string' && /^\d+$/.test(s.trim());
+  const normalizeHeader = (value: any) => String(value || '').trim().toLowerCase();
+  const sectionNames = ['WORKS', 'SCENES', 'VIDEOS', 'CREDITS', 'THUMBNAILS'];
+
+  const getValueByAliases = (section: string, row: string[], aliases: string[], fallbackIndex?: number) => {
+    const headers = sectionHeaders[section] || [];
+    const aliasSet = new Set(aliases.map((a) => normalizeHeader(a)));
+    for (let idx = 0; idx < headers.length; idx++) {
+      const header = normalizeHeader(headers[idx]);
+      if (aliasSet.has(header)) {
+        return String(row[idx + 1] || '').trim();
+      }
+    }
+    if (typeof fallbackIndex === 'number') {
+      return String(row[fallbackIndex] || '').trim();
+    }
+    return '';
+  };
+
+  const normalizeAssetPath = (value: string) => String(value || '').trim().replace(/^\./, '');
 
   for (const row of rawValues) {
     if (!row || row.length === 0) continue;
     const first = String(row[0] || '').toUpperCase();
 
-    if (['WORKS','SCENES','VIDEOS','AUDIO','CREDITS','THUMBNAILS'].includes(first)) {
-      if (String(row[1] || '').toUpperCase() === 'ID') {
+    if (sectionNames.includes(first)) {
+      const second = String(row[1] || '').trim();
+      const hasHeaderForSection = Array.isArray(sectionHeaders[first]) && sectionHeaders[first].length > 0;
+      const looksLikeLegacyHeader = second.toUpperCase() === 'ID';
+
+      if (looksLikeLegacyHeader || !hasHeaderForSection) {
         currentSection = first;
         // Capture headers for this section (slice off the section column)
         sectionHeaders[currentSection] = row.slice(1).map((h: any) => String(h || '').trim());
         continue;
       }
-      if (isNumeric(row[1])) { currentSection = first; }
+
+      // Data row for a known section
+      currentSection = first;
     }
 
     if (currentSection === 'WORKS') {
       const headers = sectionHeaders['WORKS'] || [];
-      const id = String(row[1] || '').trim();
-      const title = String(row[2] || '').trim();
+      const id = getValueByAliases('WORKS', row as string[], ['id', 'work_id', 'work_slug', 'slug'], 1);
+      const title = getValueByAliases('WORKS', row as string[], ['title', 'name', 'work_title'], 2);
       if (id) {
         const meta: Record<string,string> = {};
         for (let i = 0; i < headers.length; i++) {
@@ -241,31 +410,47 @@ function parseTheatreWorks(rawValues: string[][]): any[] {
           if (!key) continue;
           meta[key] = String(row[i+1] || '').trim();
         }
-        const isMusic = (meta['Tag'] || meta['tag'] || meta['Category'] || meta['type'] || '').toLowerCase().includes('music');
+        const isMusicRaw =
+          meta['is_music'] ||
+          meta['Is_Music'] ||
+          meta['Tag'] ||
+          meta['tag'] ||
+          meta['Category'] ||
+          meta['type'] ||
+          '';
+        const isMusicNorm = String(isMusicRaw).toLowerCase();
+        const isMusic = ['1', 'true', 'yes', 'music'].includes(isMusicNorm) || isMusicNorm.includes('music');
         works.set(id, { id, title: title || `Work ${id}`, scenes: [], meta, isMusic });
       }
     } else if (currentSection === 'SCENES') {
-      const sceneId = String(row[1] || '').trim();
-      const workId = String(row[2] || '').trim();
-      const sceneName = String(row[3] || '').trim();
+      const workId = getValueByAliases('SCENES', row as string[], ['work_id', 'work_slug', 'work', 'id_work'], 2);
+      let sceneId = getValueByAliases('SCENES', row as string[], ['scene_id', 'id', 'scene'], 1);
+      const sceneName = getValueByAliases('SCENES', row as string[], ['scene_title', 'title', 'name'], 3);
+      const sceneOrder = getValueByAliases('SCENES', row as string[], ['scene_order', 'order', 'position']);
+
+      if (!sceneId && workId) {
+        const orderOrIndex = sceneOrder || String(scenes.size + 1);
+        sceneId = `${workId}__${orderOrIndex}`;
+      }
+
+      const inlineVideo = normalizeAssetPath(getValueByAliases('SCENES', row as string[], ['video_url', 'video', 'video_file', 'video_path']));
+      // simplified schema: thumbnail_url removed; client will always generate thumbnails
+      // audio_url removed from simplified schema; audio is embedded in video files
+
       if (sceneId && workId) scenes.set(sceneId, { sceneId, workId, name: sceneName });
+      if (sceneId && inlineVideo) videos.set(sceneId, inlineVideo);
     } else if (currentSection === 'VIDEOS') {
-      const videoId = String(row[1] || '').trim();
-      const sceneId = String(row[2] || '').trim();
-      const videoFile = String(row[3] || '').trim();
-      if (sceneId && videoFile) videos.set(sceneId, videoFile.replace(/^\./, ''));
+      const sceneId = getValueByAliases('VIDEOS', row as string[], ['scene_id', 'scene', 'id_scene'], 2);
+      const videoFile = normalizeAssetPath(getValueByAliases('VIDEOS', row as string[], ['video_url', 'video', 'video_file', 'file'], 3));
+      if (sceneId && videoFile) videos.set(sceneId, videoFile);
     } else if (currentSection === 'THUMBNAILS') {
-      const sceneId = String(row[2] || '').trim();
-      const imageFile = String(row[3] || '').trim();
-      if (sceneId && imageFile) thumbnails.set(sceneId, imageFile.replace(/^\./, ''));
-    } else if (currentSection === 'AUDIO') {
-      const sceneId = String(row[2] || '').trim();
-      const audioFile = String(row[3] || '').trim();
-      if (sceneId && audioFile) audio.set(sceneId, audioFile.replace(/^\./, ''));
+      const sceneId = getValueByAliases('THUMBNAILS', row as string[], ['scene_id', 'scene', 'id_scene'], 2);
+      const imageFile = normalizeAssetPath(getValueByAliases('THUMBNAILS', row as string[], ['thumbnail_url', 'thumbnail', 'image_url', 'image_file'], 3));
+      if (sceneId && imageFile) thumbnails.set(sceneId, imageFile);
     } else if (currentSection === 'CREDITS') {
-      const workId = String(row[2] || '').trim();
-      const role = String(row[3] || '').trim();
-      const name = String(row[4] || '').trim();
+      const workId = getValueByAliases('CREDITS', row as string[], ['work_id', 'work_slug', 'work', 'id_work'], 2);
+      const role = getValueByAliases('CREDITS', row as string[], ['role', 'credit_role'], 3);
+      const name = getValueByAliases('CREDITS', row as string[], ['name', 'person', 'credit_name'], 4);
       if (workId && role) {
         if (!credits.has(workId)) credits.set(workId, []);
         credits.get(workId)?.push({ role, name });
@@ -325,64 +510,9 @@ function parseTheatreWorks(rawValues: string[][]): any[] {
     if (!work) continue;
     const videoUrl = normalizeVideoUrl(videos.get(sceneId) || '');
 
-    // Prefer sheet thumbnail but attempt to resolve to a local file if possible
-    let thumb = thumbnails.get(sceneId) || undefined;
-
-    const tryResolveLocalFromName = (name: string | undefined) => {
-      if (!name) return undefined;
-      // If it's an absolute public path, accept as-is
-      if (name.startsWith('/assets/')) return name;
-      // If it's a full URL, try to resolve local based on its basename
-      if (name.startsWith('http')) {
-        return resolveLocalFromThumbUrl(name);
-      }
-      // Otherwise treat as a bare filename and try local candidates
-      const base = decodeURIComponent((name || '').split('/').pop() || '');
-      const baseNoExt = base.replace(/\.[^.]+$/, '');
-      const candidate = findLocalThumbByBaseName(baseNoExt) || undefined;
-      // If we couldn't find a local match, return undefined (do not emit a dotted public path)
-      return candidate;
-    };
-
-    if (thumb) {
-      const resolved = tryResolveLocalFromName(thumb);
-      if (resolved) {
-        thumb = resolved; // prefer local resolution
-        console.log('[parseTheatreWorks] resolved sheet thumbnail to local', { workId: s.workId, sceneId, original: thumbnails.get(sceneId), resolved: thumb });
-      } else if (!thumb.startsWith('/') && !thumb.startsWith('http')) {
-        // If the sheet provided a bare filename but we couldn't resolve it, try deriving from video instead
-        console.log('[parseTheatreWorks] sheet thumbnail not found locally, will try derive from video', { workId: s.workId, sceneId, original: thumbnails.get(sceneId) });
-      } else if (thumb.startsWith('http')) {
-        console.log('[parseTheatreWorks] sheet thumbnail left as remote url', { workId: s.workId, sceneId, thumb });
-      }
-    }
-
-    // If this work is music-tagged, prefer local (derive) thumbnails
-    if (work?.isMusic) {
-      const localFromVideo = deriveThumbnailFromVideoUrl(videoUrl);
-      if (localFromVideo) thumb = localFromVideo;
-    }
-
-    // Final fallback: derive from video
-    if (!thumb) {
-      const derived = deriveThumbnailFromVideoUrl(videoUrl);
-      thumb = derived;
-      console.log('[parseTheatreWorks] derived thumbnail from video', { workId: s.workId, sceneId, derived });
-    }
-
-    // If thumbnail is a remote URL, rewrite to dev thumbnail proxy so thumbnails load fast and can be cached locally
-    // Skip proxy for R2 URLs (they are already fast and have proper CORS)
-    if (thumb && typeof thumb === 'string' && thumb.startsWith('http')) {
-      try {
-        const thumbUrl = new URL(thumb);
-        // Only proxy GitHub/S3 thumbnails, not R2
-        if (!thumbUrl.hostname.includes('r2.dev')) {
-          thumb = `/api/thumb/${encodeURIComponent(thumb)}`;
-        }
-      } catch (e) {
-        // ignore
-      }
-    }
+    // Generate a deterministic local thumbnail path from video URL for instant first render.
+    // This does not depend on thumbnail_url in Sheets.
+    const thumb = deriveThumbnailFromVideoUrl(videoUrl);
 
     // Provide an optional proxied video URL for hosts that block CORS so dev can proxy through the server
     let proxiedVideoUrl: string | undefined = undefined;
@@ -390,8 +520,7 @@ function parseTheatreWorks(rawValues: string[][]): any[] {
       const u = new URL(videoUrl);
       if (
         ['github.com', 'release-assets.githubusercontent.com'].includes(u.hostname) ||
-        u.hostname.endsWith('.s3.amazonaws.com') ||
-        u.hostname.endsWith('.r2.dev')
+        u.hostname.endsWith('.s3.amazonaws.com')
       ) {
         // Use path-encoded form to avoid query parsing issues in dev proxy
         proxiedVideoUrl = `/api/proxy/${encodeURIComponent(videoUrl)}`;
@@ -519,17 +648,17 @@ export async function loadTheatreWorksData(options?: { force?: boolean }) {
     try {
       const cached = await loadFromCache();
       if (Array.isArray(cached) && cached.length > 0) {
-        // Check if cache is stale: scenes should have proxiedVideoUrl and thumbnail
+        // Check if cache is stale.
         const firstScene = cached[0]?.scenes?.[0];
-        const hasR2WithoutProxy = !!(
+        const hasR2ThroughProxy = !!(
           firstScene &&
           typeof firstScene.videoUrl === 'string' &&
-          firstScene.videoUrl.includes('.r2.dev') &&
-          !firstScene.proxiedVideoUrl
+          firstScene.videoUrl.startsWith('/api/proxy/') &&
+          decodeURIComponent(firstScene.videoUrl.replace('/api/proxy/', '')).includes('.r2.dev')
         );
-        const isStale = (firstScene && !firstScene.proxiedVideoUrl && !firstScene.thumbnail) || hasR2WithoutProxy;
+        const isStale = !firstScene || !firstScene.thumbnail || hasR2ThroughProxy;
         if (isStale) {
-          console.warn('loadTheatreWorksData: cache appears stale (no proxiedVideoUrl/thumbnail), forcing refresh');
+          console.warn('loadTheatreWorksData: cache appears stale (missing thumbnail or old R2 proxy), forcing refresh');
         } else {
           return cached;
         }

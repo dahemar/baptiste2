@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import './CreditsPanel.css';
 
 interface Credit {
@@ -21,6 +21,45 @@ export default function CreditsPanel({
   onPrevWork,
   onNextWork
 }: CreditsPanelProps) {
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const [showBottomFade, setShowBottomFade] = useState(false);
+
+  const updateBottomFade = useCallback(() => {
+    const panel = panelRef.current;
+    if (!panel || typeof window === 'undefined') {
+      setShowBottomFade(false);
+      return;
+    }
+
+    const isMobileViewport = window.matchMedia('(max-width: 768px)').matches;
+    if (!isMobileViewport) {
+      setShowBottomFade(false);
+      return;
+    }
+
+    const threshold = 8;
+    const hasHiddenContentBelow = panel.scrollTop + panel.clientHeight < panel.scrollHeight - threshold;
+    setShowBottomFade(hasHiddenContentBelow);
+  }, []);
+
+  useEffect(() => {
+    if (!isVisible) return;
+    const panel = panelRef.current;
+    if (!panel) return;
+
+    const handleViewportChange = () => updateBottomFade();
+    const handlePanelScroll = () => updateBottomFade();
+
+    updateBottomFade();
+    panel.addEventListener('scroll', handlePanelScroll, { passive: true });
+    window.addEventListener('resize', handleViewportChange);
+
+    return () => {
+      panel.removeEventListener('scroll', handlePanelScroll);
+      window.removeEventListener('resize', handleViewportChange);
+    };
+  }, [isVisible, credits, title, updateBottomFade]);
+
   if (!isVisible) {
     return null;
   }
@@ -30,7 +69,11 @@ export default function CreditsPanel({
   };
 
   return (
-    <div className="credits-panel visible" onWheel={handleWheel}>
+    <div
+      ref={panelRef}
+      className={`credits-panel visible ${showBottomFade ? 'show-bottom-fade' : ''}`}
+      onWheel={handleWheel}
+    >
       <div className="credits-content">
         <div className="credit-line">
           <span className="credit-title">{title}</span>
@@ -43,6 +86,8 @@ export default function CreditsPanel({
           </div>
         ))}
       </div>
+
+      <div className="credits-bottom-fade" aria-hidden="true" />
 
       {/* Project navigation inside credits (desktop) - rendered only if handlers provided */}
       {(onPrevWork || onNextWork) && (

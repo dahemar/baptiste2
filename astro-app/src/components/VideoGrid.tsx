@@ -69,6 +69,9 @@ export default function VideoGrid({ works }: VideoGridProps) {
   const activeVideoRef = useRef<HTMLVideoElement | null>(null);
   const mobileFixedVideoRef = useRef<HTMLVideoElement | null>(null);
   const [showSceneArrows, setShowSceneArrows] = useState(false);
+  const [generatedThumbnails, setGeneratedThumbnails] = useState<Record<string, string>>({});
+  const generatedThumbsRef = useRef<Record<string, string>>({});
+  const failedThumbsRef = useRef<Set<string>>(new Set());
   const arrowsTimerRef = useRef<number | null>(null);
   // Generation counter to cancel stale playVideo operations
   const playGenRef = useRef(0);
@@ -81,6 +84,215 @@ export default function VideoGrid({ works }: VideoGridProps) {
 
   // Credits visibility - only show when playing
   const creditsVisible = isPlaying;
+
+  const sceneThumbKey = useCallback((workIdx: number, sceneIdx: number) => `${workIdx}:${sceneIdx}`, []);
+
+  const deriveLocalPosterFromVideo = useCallback((videoUrl?: string) => {
+    const raw = String(videoUrl || '').trim();
+    if (!raw) return undefined;
+    try {
+      const parsed = raw.startsWith('http') ? new URL(raw) : new URL(raw, window.location.origin);
+      const fileName = decodeURIComponent(parsed.pathname.split('/').pop() || '');
+      const base = fileName.replace(/\.[^.]+$/, '');
+      if (!base) return undefined;
+      const normalized = base.replace(/\./g, ' ').trim();
+      if (!normalized) return undefined;
+      return `/assets/images/thumbnails/${normalized}.jpg`;
+    } catch {
+      return undefined;
+    }
+  }, []);
+
+  const resolveScenePoster = useCallback((workIdx: number, sceneIdx: number, scene?: Scene | null) => {
+    const key = sceneThumbKey(workIdx, sceneIdx);
+    if (scene?.thumbnail) return scene.thumbnail;
+    const generated = generatedThumbnails[key];
+    if (generated) return generated;
+    const videoUrl = scene?.proxiedVideoUrl ?? scene?.videoUrl;
+    return deriveLocalPosterFromVideo(videoUrl);
+  }, [generatedThumbnails, deriveLocalPosterFromVideo, sceneThumbKey]);
+
+  useEffect(() => {
+    generatedThumbsRef.current = generatedThumbnails;
+  }, [generatedThumbnails]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const activeExtractions = new Set<string>();
+
+    const hasUsefulPixels = (ctx: CanvasRenderingContext2D, width: number, height: number) => {
+      const sampleW = Math.max(8, Math.floor(width / 12));
+      const sampleH = Math.max(8, Math.floor(height / 12));
+      const x = Math.max(0, Math.floor((width - sampleW) / 2));
+      const y = Math.max(0, Math.floor((height - sampleH) / 2));
+      const data = ctx.getImageData(x, y, sampleW, sampleH).data;
+      let luminanceTotal = 0;
+      let nonTransparent = 0;
+      for (let i = 0; i < data.length; i += 4) {
+        const a = data[i + 3];
+        if (a < 8) continue;
+        nonTransparent++;
+        const r = data[i];
+        const g = data[i + 1];
+        const b = data[i + 2];
+        luminanceTotal += 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      }
+      if (nonTransparent === 0) return false;
+      const avgLum = luminanceTotal / nonTransparent;
+      return avgLum > 14;
+    };
+
+    const seekTo = (video: HTMLVideoElement, time: number) =>
+      new Promise<void>((resolve, reject) => {
+        const onSeeked = () => {
+          cleanup();
+          resolve();
+        };
+        const onError = () => {
+          cleanup();
+          reject(new Error('seek failed'));
+        };
+        const cleanup = () => {
+          video.removeEventListener('seeked', onSeeked);
+          video.removeEventListener('error', onError);
+        };
+        video.addEventListener('seeked', onSeeked, { once: true });
+        video.addEventListener('error', onError, { once: true });
+        try {
+          video.currentTime = time;
+        } catch {
+          cleanup();
+          reject(new Error('invalid seek time'));
+        }
+      });
+
+    const extractFrame = async (videoUrl: string): Promise<string | null> => {
+      return await new Promise((resolve) => {
+        const video = document.createElement('video');
+        video.crossOrigin = 'anonymous';
+        video.preload = 'metadata';
+        video.muted = true;
+        video.playsInline = true;
+
+        const cleanup = () => {
+          video.pause();
+          video.removeAttribute('src');
+          video.load();
+        };
+
+        const fail = () => {
+          cleanup();
+          resolve(null);
+        };
+
+        const timeout = window.setTimeout(fail, 12000);
+
+        video.addEventListener('loadedmetadata', async () => {
+          try {
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth || 1280;
+            canvas.height = video.videoHeight || 720;
+            const ctx = canvas.getContext('2d', { willReadFrequently: true });
+            if (!ctx) {
+              clearTimeout(timeout);
+              fail();
+              return;
+            }
+
+            const duration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 4;
+            const probes = [0.12, 0.6, 1.25, 2.0]
+              .map((t) => Math.min(Math.max(0.01, t), Math.max(0.01, duration - 0.08)));
+
+            for (const probeTime of probes) {
+              try {
+                await seekTo(video, probeTime);
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                if (!hasUsefulPixels(ctx, canvas.width, canvas.height)) continue;
+                const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+                clearTimeout(timeout);
+                cleanup();
+                resolve(dataUrl);
+                return;
+              } catch {
+                // try next probe time
+              }
+            }
+
+            clearTimeout(timeout);
+            fail();
+          } catch {
+            clearTimeout(timeout);
+            fail();
+          }
+        }, { once: true });
+
+        video.addEventListener('error', () => {
+          clearTimeout(timeout);
+          fail();
+        }, { once: true });
+
+        video.src = videoUrl;
+        video.load();
+      });
+    };
+
+    const run = async () => {
+      const tasks: Array<{ key: string; url: string }> = [];
+
+      const pushTask = (workIdx: number, sceneIdx: number) => {
+        const scene = works[workIdx]?.scenes?.[sceneIdx];
+        if (!scene) return;
+        if (scene.thumbnail) return;
+        const key = sceneThumbKey(workIdx, sceneIdx);
+        if (generatedThumbsRef.current[key]) return;
+        if (failedThumbsRef.current.has(key)) return;
+        if (activeExtractions.has(key)) return;
+        if (tasks.some((t) => t.key === key)) return;
+        const url = scene.proxiedVideoUrl ?? scene.videoUrl;
+        if (!url) return;
+        tasks.push({ key, url });
+      };
+
+      // Prioridad: escena activa y primer video de cada obra (previews iniciales inmediatos)
+      pushTask(currentWorkIndex, currentSceneIndex);
+      works.forEach((_, workIdx) => pushTask(workIdx, 0));
+
+      works.forEach((work, workIdx) => {
+        (work.scenes || []).forEach((scene, sceneIdx) => {
+          pushTask(workIdx, sceneIdx);
+        });
+      });
+
+      const concurrency = 4;
+      let cursor = 0;
+      const workers = new Array(concurrency).fill(0).map(async () => {
+        while (!cancelled) {
+          const task = tasks[cursor++];
+          if (!task) break;
+          activeExtractions.add(task.key);
+          const dataUrl = await extractFrame(task.url);
+          activeExtractions.delete(task.key);
+          if (cancelled) return;
+          if (dataUrl) {
+            setGeneratedThumbnails((prev) => {
+              if (prev[task.key]) return prev;
+              return { ...prev, [task.key]: dataUrl };
+            });
+          } else {
+            failedThumbsRef.current.add(task.key);
+          }
+        }
+      });
+
+      await Promise.all(workers);
+    };
+
+    void run();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [works, sceneThumbKey, currentWorkIndex, currentSceneIndex]);
 
   useEffect(() => {
     const container = document.querySelector('.viewer-container');
@@ -181,11 +393,13 @@ export default function VideoGrid({ works }: VideoGridProps) {
       const videoSceneIndex = parseInt(item?.getAttribute('data-scene-index') || '-1');
       
       if (workIdx === null || sceneIdx === null || videoWorkIndex !== workIdx || videoSceneIndex !== sceneIdx) {
-        if (!videoEl.paused) {
+        const wasPlaying = !videoEl.paused;
+        if (wasPlaying) {
           videoEl.pause();
+          // Reset only videos that were actively playing.
+          // Keeping buffered paused videos avoids startup rebuffer stalls.
+          videoEl.currentTime = 0;
         }
-        // Reset to beginning so they don't hold buffered position
-        videoEl.currentTime = 0;
       }
     });
 
@@ -197,10 +411,11 @@ export default function VideoGrid({ works }: VideoGridProps) {
       const mobileSceneIdx = parseInt(parent?.getAttribute('data-scene-index') || '-1');
       
       if (workIdx === null || sceneIdx === null || mobileWorkIdx !== workIdx || mobileSceneIdx !== sceneIdx) {
-        if (!mobileVideo.paused) {
+        const wasPlaying = !mobileVideo.paused;
+        if (wasPlaying) {
           mobileVideo.pause();
+          mobileVideo.currentTime = 0;
         }
-        mobileVideo.currentTime = 0;
       }
     }
   }, []);
@@ -348,8 +563,8 @@ export default function VideoGrid({ works }: VideoGridProps) {
     }
   }, [isPlaying, stopAllVideosExcept]);
 
-  // Lightweight prefetch: fetch first ~512KB of next scene into browser cache
-  // Much lighter than setting preload='auto' on adjacent video elements
+  // Lightweight prefetch: fetch first ~384KB of next scene into browser cache.
+  // Delayed a bit to avoid competing with the current stream during startup.
   useEffect(() => {
     if (!isPlaying) return;
     const work = works[currentWorkIndex];
@@ -362,14 +577,20 @@ export default function VideoGrid({ works }: VideoGridProps) {
     const nextUrl = nextScene?.proxiedVideoUrl ?? nextScene?.videoUrl;
     if (!nextUrl) return;
 
-    // Fetch first 512KB with Range header to warm browser cache
-    const controller = new AbortController();
-    fetch(nextUrl, {
-      headers: { Range: 'bytes=0-524287' },
-      signal: controller.signal,
-    }).catch(() => {}); // Ignore errors — this is best-effort
+    // Wait so first playback can stabilize before warming next scene.
+    const timer = window.setTimeout(() => {
+      fetch(nextUrl, {
+        headers: { Range: 'bytes=0-393215' },
+        signal: controller.signal,
+      }).catch(() => {}); // Ignore errors — this is best-effort
+    }, 1800);
 
-    return () => controller.abort();
+    const controller = new AbortController();
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
   }, [isPlaying, currentWorkIndex, currentSceneIndex, works]);
 
   // Release video buffers from distant works when switching works
@@ -623,7 +844,7 @@ export default function VideoGrid({ works }: VideoGridProps) {
                   key={`player-${currentWorkIndex}-${currentSceneIndex}`}
                   ref={mobileFixedVideoRef}
                   src={works[currentWorkIndex]?.scenes?.[currentSceneIndex]?.proxiedVideoUrl ?? works[currentWorkIndex]?.scenes?.[currentSceneIndex]?.videoUrl}
-                  poster={works[currentWorkIndex]?.scenes?.[currentSceneIndex]?.thumbnail}
+                  poster={resolveScenePoster(currentWorkIndex, currentSceneIndex, works[currentWorkIndex]?.scenes?.[currentSceneIndex])}
                   loop
                   playsInline
                   preload="auto"
@@ -710,7 +931,7 @@ export default function VideoGrid({ works }: VideoGridProps) {
                       {firstScene ? (
                         <video
                           src={firstScene.proxiedVideoUrl ?? firstScene.videoUrl}
-                          poster={firstScene.thumbnail}
+                          poster={resolveScenePoster(workIdx, 0, firstScene)}
                           playsInline
                           preload="metadata"
                           loop
@@ -791,15 +1012,17 @@ export default function VideoGrid({ works }: VideoGridProps) {
                   >
                     <video
                       src={
-                        Math.abs(workIdx - currentWorkIndex) <= 1
+                        Math.abs(workIdx - currentWorkIndex) <= 1 || sceneIdx === 0
                           ? (scene.proxiedVideoUrl ?? scene.videoUrl)
                           : undefined
                       }
-                      poster={scene.thumbnail}
+                      poster={resolveScenePoster(workIdx, sceneIdx, scene)}
                       playsInline
                       preload={
                         workIdx === currentWorkIndex && sceneIdx === currentSceneIndex ? 'auto' :
                         workIdx === currentWorkIndex && Math.abs(sceneIdx - currentSceneIndex) <= 1 ? 'auto' :
+                        sceneIdx === 0 ? 'metadata' :
+                        Math.abs(workIdx - currentWorkIndex) <= 1 ? 'metadata' :
                         'none'
                       }
                       loop
