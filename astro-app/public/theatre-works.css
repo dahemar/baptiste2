@@ -639,10 +639,11 @@ body {
 .mobile-fixed-player .video-wrapper .nav-arrow.left { left: 12px; }
 .mobile-fixed-player .video-wrapper .nav-arrow.right { right: 12px; }
 
-/* Project navigation controls - always visible at bottom */
+/* Project navigation controls - position above the credits panel on mobile */
 .mobile-fixed-player .project-nav-controls {
   position: absolute;
-  bottom: calc(env(safe-area-inset-bottom) + 1rem);
+  /* push the controls up by the credits panel area (96px) + small gap */
+  bottom: calc(env(safe-area-inset-bottom) + 96px + 0.5rem);
   left: 1rem;
   right: 1rem;
   display: flex;

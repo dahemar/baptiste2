@@ -136,7 +136,16 @@
     -webkit-overflow-scrolling: touch;
     overscroll-behavior: contain;
     padding-bottom: calc(96px + env(safe-area-inset-bottom));
-    position: relative;
+    /* Attach the credits panel to the viewport bottom so it reaches the
+       very bottom of the page on mobile. It remains scrollable and keeps
+       the padding space for safe-area and controls. */
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    z-index: 1400;
+    max-height: 60vh;
   }
 
   /* When credits are visible in the mobile fixed player, lift the panel 4px
