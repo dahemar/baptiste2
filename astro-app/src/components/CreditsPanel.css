@@ -145,8 +145,8 @@
     left: 0;
     right: 0;
     bottom: 0;
-    height: 72px;
-    margin-top: -72px;
+    height: 82px; /* aumentado 10px para que el degradado empiece más arriba */
+    margin-top: -82px;
     background: linear-gradient(to bottom, rgba(42, 42, 42, 0), rgba(42, 42, 42, 0.96));
     pointer-events: none;
     z-index: 2;
