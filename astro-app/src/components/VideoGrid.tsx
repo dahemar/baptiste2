@@ -65,7 +65,9 @@ export default function VideoGrid({ works }: VideoGridProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [hoveredScene, setHoveredScene] = useState<{ workIndex: number; sceneIndex: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [isMobile, setIsMobile] = useState(false);
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== 'undefined' ? window.innerWidth <= 768 : false
+  );
   const activeVideoRef = useRef<HTMLVideoElement | null>(null);
   const mobileFixedVideoRef = useRef<HTMLVideoElement | null>(null);
   const [showSceneArrows, setShowSceneArrows] = useState(false);
@@ -117,6 +119,9 @@ export default function VideoGrid({ works }: VideoGridProps) {
   }, [generatedThumbnails]);
 
   useEffect(() => {
+    // Skip expensive thumbnail extraction on mobile — server-derived posters are enough
+    if (isMobile) return;
+
     let cancelled = false;
     const activeExtractions = new Set<string>();
 
@@ -292,7 +297,7 @@ export default function VideoGrid({ works }: VideoGridProps) {
     return () => {
       cancelled = true;
     };
-  }, [works, sceneThumbKey, currentWorkIndex, currentSceneIndex]);
+  }, [works, sceneThumbKey, currentWorkIndex, currentSceneIndex, isMobile]);
 
   useEffect(() => {
     const container = document.querySelector('.viewer-container');
@@ -418,6 +423,20 @@ export default function VideoGrid({ works }: VideoGridProps) {
         }
       }
     }
+  }, []);
+
+  // Forcefully pause & mute the mobile video synchronously.
+  // Must be called BEFORE any state change that unmounts or re-sources the video,
+  // because React may remove the element before async effects can clean up.
+  const forcePauseMobileVideo = useCallback(() => {
+    const video = mobileFixedVideoRef.current;
+    if (!video) return;
+    try {
+      video.pause();
+      video.muted = true;
+      video.removeAttribute('src');
+      video.load(); // release buffers & show poster
+    } catch {}
   }, []);
 
   // Play the specified video — always restarts from beginning
@@ -560,38 +579,78 @@ export default function VideoGrid({ works }: VideoGridProps) {
   useEffect(() => {
     if (!isPlaying) {
       stopAllVideosExcept(null, null);
+      // Nuclear safety net: force-pause every <video> on the page
+      // to guarantee no orphan audio survives unmount / state changes.
+      const allVideos = document.querySelectorAll('video') as NodeListOf<HTMLVideoElement>;
+      allVideos.forEach((v) => {
+        try {
+          if (!v.paused) {
+            v.pause();
+            v.muted = true;
+          }
+        } catch {}
+      });
     }
   }, [isPlaying, stopAllVideosExcept]);
 
-  // Lightweight prefetch: fetch first ~384KB of next scene into browser cache.
-  // Delayed a bit to avoid competing with the current stream during startup.
+  // Pause mobile video when the tab/app goes to background (e.g. swipe home on iOS)
+  useEffect(() => {
+    if (!isMobile) return;
+    const handler = () => {
+      if (document.hidden) {
+        const video = mobileFixedVideoRef.current;
+        if (video && !video.paused) {
+          video.pause();
+          video.muted = true;
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', handler);
+    return () => document.removeEventListener('visibilitychange', handler);
+  }, [isMobile]);
+
+  // Lightweight prefetch: fetch beginning of adjacent scenes into browser cache.
+  // On mobile only one video plays at a time so we can be more aggressive.
   useEffect(() => {
     if (!isPlaying) return;
     const work = works[currentWorkIndex];
     if (!work) return;
 
-    const nextIdx = currentSceneIndex + 1;
-    if (nextIdx >= work.scenes.length) return;
-
-    const nextScene = work.scenes[nextIdx];
-    const nextUrl = nextScene?.proxiedVideoUrl ?? nextScene?.videoUrl;
-    if (!nextUrl) return;
-
-    // Wait so first playback can stabilize before warming next scene.
-    const timer = window.setTimeout(() => {
-      fetch(nextUrl, {
-        headers: { Range: 'bytes=0-393215' },
-        signal: controller.signal,
-      }).catch(() => {}); // Ignore errors — this is best-effort
-    }, 1800);
-
     const controller = new AbortController();
+    const prefetchBytes = isMobile ? 786431 : 393215; // 768KB mobile, 384KB desktop
+    const delay = isMobile ? 600 : 1800; // Mobile: less competing traffic
+
+    const toFetch: string[] = [];
+
+    // Next scene
+    const nextIdx = currentSceneIndex + 1;
+    if (nextIdx < work.scenes.length) {
+      const nextUrl = work.scenes[nextIdx]?.proxiedVideoUrl ?? work.scenes[nextIdx]?.videoUrl;
+      if (nextUrl) toFetch.push(nextUrl);
+    }
+
+    // Previous scene (mobile only — common swipe-back pattern)
+    if (isMobile && currentSceneIndex > 0) {
+      const prevUrl = work.scenes[currentSceneIndex - 1]?.proxiedVideoUrl ?? work.scenes[currentSceneIndex - 1]?.videoUrl;
+      if (prevUrl) toFetch.push(prevUrl);
+    }
+
+    if (toFetch.length === 0) return;
+
+    const timer = window.setTimeout(() => {
+      toFetch.forEach((url) => {
+        fetch(url, {
+          headers: { Range: `bytes=0-${prefetchBytes}` },
+          signal: controller.signal,
+        }).catch(() => {});
+      });
+    }, delay);
 
     return () => {
       clearTimeout(timer);
       controller.abort();
     };
-  }, [isPlaying, currentWorkIndex, currentSceneIndex, works]);
+  }, [isPlaying, currentWorkIndex, currentSceneIndex, works, isMobile]);
 
   // Release video buffers from distant works when switching works
   // React removes src for distant works (lazy src), but we need to force
@@ -617,43 +676,77 @@ export default function VideoGrid({ works }: VideoGridProps) {
     }
   }, [currentWorkIndex]);
 
+  // Comprehensive mobile playback manager.
+  // Handles src assignment, loading and autoplay for the persistent video element
+  // (no key-based remounting — the same <video> stays in the DOM across scenes).
   useEffect(() => {
-    if (!isMobile || !mobileFixedVideoRef.current) return;
+    if (!isMobile) return;
     const video = mobileFixedVideoRef.current;
+    if (!video) return;
+
     if (!isPlaying) {
+      // Force silence when leaving the player
       video.pause();
+      video.muted = true;
+      video.removeAttribute('src');
+      video.load();
       return;
     }
+
+    const scene = works[currentWorkIndex]?.scenes?.[currentSceneIndex];
+    if (!scene) return;
+
+    const newSrc = scene.proxiedVideoUrl ?? scene.videoUrl;
+    const poster = resolveScenePoster(currentWorkIndex, currentSceneIndex, scene);
+
+    // Pause + clear old source before loading new one
+    video.pause();
+    if (poster) video.poster = poster;
+    video.src = newSrc;
+    video.currentTime = 0;
+    video.preload = 'auto';
+    video.load();
+
+    let cancelled = false;
+
     const play = async () => {
+      if (cancelled) return;
       try {
         video.muted = false;
         video.volume = 1.0;
         await video.play();
-      } catch (error) {
-        console.error('Error playing mobile video:', error);
-        // If unmuted play fails due to autoplay policy, try muted first
+      } catch {
+        // Autoplay policy fallback: play muted then unmute
         try {
           video.muted = true;
           await video.play();
-          // Then unmute and play again to enable audio
-          video.muted = false;
-          video.volume = 1.0;
-          await video.play();
+          if (!cancelled) {
+            video.muted = false;
+            video.volume = 1.0;
+            await video.play();
+          }
         } catch (e2) {
-          console.error('Error playing mobile video (muted fallback):', e2);
+          console.error('[mobile] play failed:', e2);
         }
       }
     };
-    if (video.readyState >= 2) {
+
+    // Use 'loadeddata' — fires earlier than 'canplay' for faster start
+    const handleReady = () => play();
+    video.addEventListener('loadeddata', handleReady, { once: true });
+
+    // Safety timeout: force play after 2s even if event hasn't fired
+    const timer = setTimeout(() => {
+      video.removeEventListener('loadeddata', handleReady);
       play();
-    } else {
-      const handleCanPlay = () => {
-        play();
-        video.removeEventListener('canplay', handleCanPlay);
-      };
-      video.addEventListener('canplay', handleCanPlay);
-    }
-  }, [isMobile, isPlaying, currentWorkIndex, currentSceneIndex]);
+    }, 2000);
+
+    return () => {
+      cancelled = true;
+      video.removeEventListener('loadeddata', handleReady);
+      clearTimeout(timer);
+    };
+  }, [isMobile, isPlaying, currentWorkIndex, currentSceneIndex, works, resolveScenePoster]);
 
   // Keyboard navigation
   useEffect(() => {
@@ -771,6 +864,7 @@ export default function VideoGrid({ works }: VideoGridProps) {
               className="back-button"
               aria-label="Back"
               onClick={() => {
+                forcePauseMobileVideo();
                 setIsPlaying(false);
               }}
             >
@@ -786,6 +880,7 @@ export default function VideoGrid({ works }: VideoGridProps) {
                 onClick={() => {
                   const total = works[currentWorkIndex]?.scenes?.length || 0;
                   if (!total) return;
+                  forcePauseMobileVideo();
                   const prev = (currentSceneIndex - 1 + total) % total;
                   setCurrentSceneIndex(prev);
                   setIsPlaying(true);
@@ -798,6 +893,7 @@ export default function VideoGrid({ works }: VideoGridProps) {
                 onClick={() => {
                   const total = works[currentWorkIndex]?.scenes?.length || 0;
                   if (!total) return;
+                  forcePauseMobileVideo();
                   const next = (currentSceneIndex + 1) % total;
                   setCurrentSceneIndex(next);
                   setIsPlaying(true);
@@ -812,6 +908,7 @@ export default function VideoGrid({ works }: VideoGridProps) {
                 onClick={() => {
                   const total = works[currentWorkIndex]?.scenes?.length || 0;
                   if (!total) return;
+                  forcePauseMobileVideo();
                   const prev = (currentSceneIndex - 1 + total) % total;
                   setCurrentSceneIndex(prev);
                   setIsPlaying(true);
@@ -826,6 +923,7 @@ export default function VideoGrid({ works }: VideoGridProps) {
                 onClick={() => {
                   const total = works[currentWorkIndex]?.scenes?.length || 0;
                   if (!total) return;
+                  forcePauseMobileVideo();
                   const next = (currentSceneIndex + 1) % total;
                   setCurrentSceneIndex(next);
                   setIsPlaying(true);
@@ -841,9 +939,7 @@ export default function VideoGrid({ works }: VideoGridProps) {
                 style={{ width: '100%', height: '100%' }}
               >
                 <video
-                  key={`player-${currentWorkIndex}-${currentSceneIndex}`}
                   ref={mobileFixedVideoRef}
-                  src={works[currentWorkIndex]?.scenes?.[currentSceneIndex]?.proxiedVideoUrl ?? works[currentWorkIndex]?.scenes?.[currentSceneIndex]?.videoUrl}
                   poster={resolveScenePoster(currentWorkIndex, currentSceneIndex, works[currentWorkIndex]?.scenes?.[currentSceneIndex])}
                   loop
                   playsInline
@@ -875,6 +971,7 @@ export default function VideoGrid({ works }: VideoGridProps) {
                 onClick={() => {
                   const totalWorks = works.length;
                   if (!totalWorks) return;
+                  forcePauseMobileVideo();
                   const prevWork = (currentWorkIndex - 1 + totalWorks) % totalWorks;
                   setCurrentWorkIndex(prevWork);
                   setCurrentSceneIndex(0);
@@ -888,6 +985,7 @@ export default function VideoGrid({ works }: VideoGridProps) {
                 onClick={() => {
                   const totalWorks = works.length;
                   if (!totalWorks) return;
+                  forcePauseMobileVideo();
                   const nextWork = (currentWorkIndex + 1) % totalWorks;
                   setCurrentWorkIndex(nextWork);
                   setCurrentSceneIndex(0);
