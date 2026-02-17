@@ -1048,12 +1048,13 @@ body {
     bottom: 40dvh;
     width: 100vw;
     aspect-ratio: 16 / 9;
-    background: #000;
+    background: #1a1a1a; /* fondo gris para evitar franja negra bajo el vídeo */
     z-index: 1100;
     display: flex;
     align-items: center;
     justify-content: center;
     margin-top: -16px;
+    overflow: hidden; /* recorta cualquier píxel extra del vídeo */
   }
   .mobile-fixed-player .player-header {
     position: absolute;
