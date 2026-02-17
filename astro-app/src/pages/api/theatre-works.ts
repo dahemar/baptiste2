@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { loadFromCache, saveToCache, fetchFromGoogleSheets } from '../../utils/googleSheetsManager';
+import { loadFromCache, saveToCache, fetchFromGoogleSheets, clearMemoryCache } from '../../utils/googleSheetsManager';
 
 console.log('[api/theatre-works] module imported');
 

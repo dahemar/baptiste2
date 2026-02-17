@@ -37,7 +37,10 @@ export function clearMemoryCache() {
 export async function fetchFromGoogleSheets(): Promise<any[]> {
   const CACHE_KEY = 'theatreWorks';
   // Return cached value if present
-  if (cache.has(CACHE_KEY)) return cache.get(CACHE_KEY);
+  if (cache.has(CACHE_KEY)) {
+    const cached = cache.get(CACHE_KEY);
+    if (Array.isArray(cached) && cached.length > 0) return cached;
+  }
 
   let rows: any[] | null = null;
 
@@ -111,8 +114,13 @@ export async function fetchFromGoogleSheets(): Promise<any[]> {
     console.log('fetchFromGoogleSheets: trying local CSV fallback');
     const csvPaths = [
       path.resolve(process.cwd(), 'data', 'theatre-works.csv'),
+      path.resolve(process.cwd(), 'data', 'theatre-works.csv.backup'),
       path.resolve(process.cwd(), 'astro-app', 'data', 'theatre-works.csv'),
+      path.resolve(process.cwd(), 'astro-app', 'data', 'theatre-works.csv.backup'),
       path.resolve(process.cwd(), '..', 'astro-app', 'data', 'theatre-works.csv'),
+      path.resolve(process.cwd(), '..', 'astro-app', 'data', 'theatre-works.csv.backup'),
+      path.resolve(process.cwd(), 'baptiste-theatre_works-updated.csv'),
+      path.resolve(process.cwd(), 'baptiste-theatre_works-releases.csv'),
     ];
     for (const csvPath of csvPaths) {
       try {
@@ -138,7 +146,6 @@ export async function fetchFromGoogleSheets(): Promise<any[]> {
 
   if (!Array.isArray(rows) || rows.length === 0) {
     console.warn('fetchFromGoogleSheets: no rows obtained from any source');
-    cache.set(CACHE_KEY, []);
     try { await saveToCache([]); } catch {}
     return [];
   }

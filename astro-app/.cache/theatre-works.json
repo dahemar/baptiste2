@@ -5,38 +5,32 @@
     "scenes": [
       {
         "id": "1-scene-0",
-        "videoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2FElie.Concours.1.mp4",
-        "proxiedVideoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2FElie.Concours.1.mp4",
+        "videoUrl": "https://pub-16fb774f4ada4a69b6c70bc856201eeb.r2.dev/Elie.Concours.1.mp4",
         "thumbnail": "/assets/images/thumbnails/Elie Concours 1.jpg"
       },
       {
         "id": "1-scene-1",
-        "videoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2FElie.Concours.2.mp4",
-        "proxiedVideoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2FElie.Concours.2.mp4",
+        "videoUrl": "https://pub-16fb774f4ada4a69b6c70bc856201eeb.r2.dev/Elie.Concours.2.mp4",
         "thumbnail": "/assets/images/thumbnails/Elie Concours 2.jpg"
       },
       {
         "id": "1-scene-2",
-        "videoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2FElie.Concours.3.mp4",
-        "proxiedVideoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2FElie.Concours.3.mp4",
+        "videoUrl": "https://pub-16fb774f4ada4a69b6c70bc856201eeb.r2.dev/Elie.Concours.3.mp4",
         "thumbnail": "/assets/images/thumbnails/Elie Concours 3.jpg"
       },
       {
         "id": "1-scene-3",
-        "videoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2FJeremiades.1.mp4",
-        "proxiedVideoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2FJeremiades.1.mp4",
+        "videoUrl": "https://pub-16fb774f4ada4a69b6c70bc856201eeb.r2.dev/Jeremiades.1.mp4",
         "thumbnail": "/assets/images/thumbnails/Jeremiades 1.jpg"
       },
       {
         "id": "1-scene-4",
-        "videoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2FJeremiades.2.mp4",
-        "proxiedVideoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2FJeremiades.2.mp4",
+        "videoUrl": "https://pub-16fb774f4ada4a69b6c70bc856201eeb.r2.dev/Jeremiades.2.mp4",
         "thumbnail": "/assets/images/thumbnails/Jeremiades 2.jpg"
       },
       {
         "id": "1-scene-5",
-        "videoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2FJeremiades.3.mp4",
-        "proxiedVideoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2FJeremiades.3.mp4",
+        "videoUrl": "https://pub-16fb774f4ada4a69b6c70bc856201eeb.r2.dev/Jeremiades.3.mp4",
         "thumbnail": "/assets/images/thumbnails/Jeremiades 3.jpg"
       }
     ],
@@ -75,32 +69,27 @@
     "scenes": [
       {
         "id": "2-scene-0",
-        "videoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2F1.Lamp.1.mp4",
-        "proxiedVideoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2F1.Lamp.1.mp4",
+        "videoUrl": "https://pub-16fb774f4ada4a69b6c70bc856201eeb.r2.dev/1.Lamp.1.mp4",
         "thumbnail": "/assets/images/thumbnails/1.Lamp 1.jpg"
       },
       {
         "id": "2-scene-1",
-        "videoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2F2.Siffle.1.mp4",
-        "proxiedVideoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2F2.Siffle.1.mp4",
+        "videoUrl": "https://pub-16fb774f4ada4a69b6c70bc856201eeb.r2.dev/2.Siffle.1.mp4",
         "thumbnail": "/assets/images/thumbnails/2.Siffle 1.jpg"
       },
       {
         "id": "2-scene-2",
-        "videoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2F3.Baldwin.1.mp4",
-        "proxiedVideoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2F3.Baldwin.1.mp4",
+        "videoUrl": "https://pub-16fb774f4ada4a69b6c70bc856201eeb.r2.dev/3.Baldwin.1.mp4",
         "thumbnail": "/assets/images/thumbnails/3.Baldwin 1.jpg"
       },
       {
         "id": "2-scene-3",
-        "videoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2F4.Shepperd.1.mp4",
-        "proxiedVideoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2F4.Shepperd.1.mp4",
+        "videoUrl": "https://pub-16fb774f4ada4a69b6c70bc856201eeb.r2.dev/4.Shepperd.1.mp4",
         "thumbnail": "/assets/images/thumbnails/4.Shepperd 1.jpg"
       },
       {
         "id": "2-scene-4",
-        "videoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2F5.Hand.1.mp4",
-        "proxiedVideoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2F5.Hand.1.mp4",
+        "videoUrl": "https://pub-16fb774f4ada4a69b6c70bc856201eeb.r2.dev/5.Hand.1.mp4",
         "thumbnail": "/assets/images/thumbnails/5.Hand 1.jpg"
       }
     ],
@@ -151,68 +140,57 @@
     "scenes": [
       {
         "id": "3-scene-0",
-        "videoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2F1.Grace.chien.kora.mp4",
-        "proxiedVideoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2F1.Grace.chien.kora.mp4",
+        "videoUrl": "https://pub-16fb774f4ada4a69b6c70bc856201eeb.r2.dev/1.Grace.chien.kora.mp4",
         "thumbnail": "/assets/images/thumbnails/1.Grace chien kora.jpg"
       },
       {
         "id": "3-scene-1",
-        "videoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2F2.Oiseaux.noirs.mp4",
-        "proxiedVideoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2F2.Oiseaux.noirs.mp4",
+        "videoUrl": "https://pub-16fb774f4ada4a69b6c70bc856201eeb.r2.dev/2.Oiseaux.noirs.mp4",
         "thumbnail": "/assets/images/thumbnails/2.Oiseaux noirs.jpg"
       },
       {
         "id": "3-scene-2",
-        "videoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2F3.Le.Dodo.mp4",
-        "proxiedVideoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2F3.Le.Dodo.mp4",
+        "videoUrl": "https://pub-16fb774f4ada4a69b6c70bc856201eeb.r2.dev/3.Le.Dodo.mp4",
         "thumbnail": "/assets/images/thumbnails/3.Le Dodo.jpg"
       },
       {
         "id": "3-scene-3",
-        "videoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2F4.diablesse.cacao.mp4",
-        "proxiedVideoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2F4.diablesse.cacao.mp4",
+        "videoUrl": "https://pub-16fb774f4ada4a69b6c70bc856201eeb.r2.dev/4.diablesse.cacao.mp4",
         "thumbnail": "/assets/images/thumbnails/4.diablesse cacao.jpg"
       },
       {
         "id": "3-scene-4",
-        "videoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2F5.Vache.noire.mp4",
-        "proxiedVideoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2F5.Vache.noire.mp4",
+        "videoUrl": "https://pub-16fb774f4ada4a69b6c70bc856201eeb.r2.dev/5.Vache.noire.mp4",
         "thumbnail": "/assets/images/thumbnails/5.Vache noire.jpg"
       },
       {
         "id": "3-scene-5",
-        "videoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2F6.Elie.epee.mp4",
-        "proxiedVideoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2F6.Elie.epee.mp4",
+        "videoUrl": "https://pub-16fb774f4ada4a69b6c70bc856201eeb.r2.dev/6.Elie.epee.mp4",
         "thumbnail": "/assets/images/thumbnails/6.Elie épée.jpg"
       },
       {
         "id": "3-scene-6",
-        "videoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2F7.Oiseaux.blancs.mp4",
-        "proxiedVideoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2F7.Oiseaux.blancs.mp4",
+        "videoUrl": "https://pub-16fb774f4ada4a69b6c70bc856201eeb.r2.dev/7.Oiseaux.blancs.mp4",
         "thumbnail": "/assets/images/thumbnails/7.Oiseaux blancs.jpg"
       },
       {
         "id": "3-scene-7",
-        "videoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2F8.Poursuite.DC.danse.mp4",
-        "proxiedVideoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2F8.Poursuite.DC.danse.mp4",
+        "videoUrl": "https://pub-16fb774f4ada4a69b6c70bc856201eeb.r2.dev/8.Poursuite.DC.danse.mp4",
         "thumbnail": "/assets/images/thumbnails/8.Poursuite DC danse.jpg"
       },
       {
         "id": "3-scene-8",
-        "videoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2F9.Poursuite.DC.coros.mp4",
-        "proxiedVideoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2F9.Poursuite.DC.coros.mp4",
+        "videoUrl": "https://pub-16fb774f4ada4a69b6c70bc856201eeb.r2.dev/9.Poursuite.DC.coros.mp4",
         "thumbnail": "/assets/images/thumbnails/9.Poursuite DC coros.jpg"
       },
       {
         "id": "3-scene-9",
-        "videoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2F10.La.Chatte.au.Soleil.mp4",
-        "proxiedVideoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2F10.La.Chatte.au.Soleil.mp4",
+        "videoUrl": "https://pub-16fb774f4ada4a69b6c70bc856201eeb.r2.dev/10.La.Chatte.au.Soleil.mp4",
         "thumbnail": "/assets/images/thumbnails/10.La Chatte au Soleil.jpg"
       },
       {
         "id": "3-scene-10",
-        "videoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2F11.Le.Coton.mp4",
-        "proxiedVideoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2F11.Le.Coton.mp4",
+        "videoUrl": "https://pub-16fb774f4ada4a69b6c70bc856201eeb.r2.dev/11.Le.Coton.mp4",
         "thumbnail": "/assets/images/thumbnails/11.Le Coton.jpg"
       }
     ],
@@ -251,38 +229,32 @@
     "scenes": [
       {
         "id": "4-scene-0",
-        "videoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2F1.La.Nuit.mp4",
-        "proxiedVideoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2F1.La.Nuit.mp4",
+        "videoUrl": "https://pub-16fb774f4ada4a69b6c70bc856201eeb.r2.dev/1.La.Nuit.mp4",
         "thumbnail": "/assets/images/thumbnails/1.La Nuit.jpg"
       },
       {
         "id": "4-scene-1",
-        "videoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2F2.Gorge.rouge.mp4",
-        "proxiedVideoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2F2.Gorge.rouge.mp4",
+        "videoUrl": "https://pub-16fb774f4ada4a69b6c70bc856201eeb.r2.dev/2.Gorge.rouge.mp4",
         "thumbnail": "/assets/images/thumbnails/2.Gorge rouge.jpg"
       },
       {
         "id": "4-scene-2",
-        "videoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2F3.Intro.Pleurs.mp4",
-        "proxiedVideoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2F3.Intro.Pleurs.mp4",
+        "videoUrl": "https://pub-16fb774f4ada4a69b6c70bc856201eeb.r2.dev/3.Intro.Pleurs.mp4",
         "thumbnail": "/assets/images/thumbnails/3.Intro Pleurs.jpg"
       },
       {
         "id": "4-scene-3",
-        "videoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2F4.End.Song.mp4",
-        "proxiedVideoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2F4.End.Song.mp4",
+        "videoUrl": "https://pub-16fb774f4ada4a69b6c70bc856201eeb.r2.dev/4.End.Song.mp4",
         "thumbnail": "/assets/images/thumbnails/4.End Song.jpg"
       },
       {
         "id": "4-scene-4",
-        "videoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2F5.Toux.mp4",
-        "proxiedVideoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2F5.Toux.mp4",
+        "videoUrl": "https://pub-16fb774f4ada4a69b6c70bc856201eeb.r2.dev/5.Toux.mp4",
         "thumbnail": "/assets/images/thumbnails/5.Toux.jpg"
       },
       {
         "id": "4-scene-5",
-        "videoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2F6.Eteignez.tout.mp4",
-        "proxiedVideoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2F6.Eteignez.tout.mp4",
+        "videoUrl": "https://pub-16fb774f4ada4a69b6c70bc856201eeb.r2.dev/6.Eteignez.tout.mp4",
         "thumbnail": "/assets/images/thumbnails/6.Eteignez tout.jpg"
       }
     ],
@@ -299,38 +271,32 @@
     "scenes": [
       {
         "id": "5-scene-0",
-        "videoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2F1.Drone.Postures.mp4",
-        "proxiedVideoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2F1.Drone.Postures.mp4",
+        "videoUrl": "https://pub-16fb774f4ada4a69b6c70bc856201eeb.r2.dev/1.Drone.Postures.mp4",
         "thumbnail": "/assets/images/thumbnails/1.Drone Postures.jpg"
       },
       {
         "id": "5-scene-1",
-        "videoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2F2.Organ.Vinyl.mp4",
-        "proxiedVideoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2F2.Organ.Vinyl.mp4",
+        "videoUrl": "https://pub-16fb774f4ada4a69b6c70bc856201eeb.r2.dev/2.Organ.Vinyl.mp4",
         "thumbnail": "/assets/images/thumbnails/2.Organ Vinyl.jpg"
       },
       {
         "id": "5-scene-2",
-        "videoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2F3.Loop.Felicidad.mp4",
-        "proxiedVideoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2F3.Loop.Felicidad.mp4",
+        "videoUrl": "https://pub-16fb774f4ada4a69b6c70bc856201eeb.r2.dev/3.Loop.Felicidad.mp4",
         "thumbnail": "/assets/images/thumbnails/3.Loop Felicidad.jpg"
       },
       {
         "id": "5-scene-3",
-        "videoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2F4.Piano.Theme.mp4",
-        "proxiedVideoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2F4.Piano.Theme.mp4",
+        "videoUrl": "https://pub-16fb774f4ada4a69b6c70bc856201eeb.r2.dev/4.Piano.Theme.mp4",
         "thumbnail": "/assets/images/thumbnails/4.Piano Theme.jpg"
       },
       {
         "id": "5-scene-4",
-        "videoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2F5.Orfeu.Granular.mp4",
-        "proxiedVideoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2F5.Orfeu.Granular.mp4",
+        "videoUrl": "https://pub-16fb774f4ada4a69b6c70bc856201eeb.r2.dev/5.Orfeu.Granular.mp4",
         "thumbnail": "/assets/images/thumbnails/5.Orfeu Granular.jpg"
       },
       {
         "id": "5-scene-5",
-        "videoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2F6.Freeze.Cabelo.mp4",
-        "proxiedVideoUrl": "/api/proxy/https%3A%2F%2Fgithub.com%2Fdahemar%2Fvideo-assets%2Freleases%2Fdownload%2Fmedia-assets-2026-01-28%2F6.Freeze.Cabelo.mp4",
+        "videoUrl": "https://pub-16fb774f4ada4a69b6c70bc856201eeb.r2.dev/6.Freeze.Cabelo.mp4",
         "thumbnail": "/assets/images/thumbnails/6.Freeze Cabelo.jpg"
       }
     ],

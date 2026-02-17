@@ -272,8 +272,16 @@ export default function VideoGrid({ works }: VideoGridProps) {
       }
     };
 
+    // If this call comes from a direct user gesture (click/tap), attempt play immediately
+    // to preserve gesture context and allow unmuted playback in browsers with autoplay rules.
+    if (fromUserGesture) {
+      if (needsLoad) {
+        videoElement.load();
+      }
+      await doPlay();
+    }
     // If already buffered enough, play immediately (readyState 2+ = has current frame)
-    if (videoElement.readyState >= 2) {
+    else if (videoElement.readyState >= 2) {
       await doPlay();
     } else {
       // Wait for canplay with a safety timeout
@@ -622,12 +630,13 @@ export default function VideoGrid({ works }: VideoGridProps) {
                   controls={false}
                   disablePictureInPicture
                   controlsList="nodownload noplaybackrate noremoteplayback nofullscreen"
-                  crossOrigin="anonymous"
                   onClick={(e) => {
                     e.stopPropagation();
                     showArrowsForAWhile();
                     const vid = e.currentTarget;
                     if (vid.paused) {
+                      vid.muted = false;
+                      vid.volume = 1.0;
                       vid.play().catch(() => {});
                     } else {
                       vid.pause();
@@ -706,7 +715,6 @@ export default function VideoGrid({ works }: VideoGridProps) {
                           preload="metadata"
                           loop
                           muted
-                          crossOrigin="anonymous"
                         />
                       ) : (
                         <div className="project-placeholder">No scenes</div>
@@ -795,7 +803,6 @@ export default function VideoGrid({ works }: VideoGridProps) {
                         'none'
                       }
                       loop
-                      crossOrigin="anonymous"
                     />
                     <button 
                       className="play-pause-button"

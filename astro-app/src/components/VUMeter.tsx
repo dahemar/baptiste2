@@ -27,11 +27,40 @@ const initGlobalAudioContext = () => {
   return { context: GLOBAL_AUDIO_CONTEXT, analyser: GLOBAL_ANALYSER };
 };
 
+// Check if a media element can safely be connected to Web Audio API.
+// createMediaElementSource on a cross-origin video without crossOrigin attribute
+// causes the browser to SILENTLY MUTE all audio output from that element.
+const isSafeForWebAudio = (el: HTMLMediaElement): boolean => {
+  // Same-origin or blob/data URLs are always safe
+  const src = el.currentSrc || el.src || '';
+  if (!src || src.startsWith('blob:') || src.startsWith('data:')) return true;
+
+  try {
+    const srcUrl = new URL(src, window.location.href);
+    // Same origin — safe
+    if (srcUrl.origin === window.location.origin) return true;
+  } catch {
+    return true; // relative URL or unparseable — treat as same-origin
+  }
+
+  // Cross-origin: only safe if the element was loaded with crossOrigin attribute
+  // (which makes the browser enforce CORS and allows Web Audio to read audio data)
+  return el.crossOrigin !== null;
+};
+
 // Connect audio/video element to global analyser
 const connectMediaToAnalyser = (mediaElement: HTMLMediaElement | null) => {
   if (!mediaElement) return;
   
   if (CONNECTED_AUDIO_ELEMENTS.has(mediaElement)) return;
+
+  // IMPORTANT: Do NOT call createMediaElementSource on cross-origin media without
+  // crossOrigin attribute — doing so silences the element's audio output permanently.
+  if (!isSafeForWebAudio(mediaElement)) {
+    // Mark as "connected" so we don't retry, but skip actual Web Audio connection
+    CONNECTED_AUDIO_ELEMENTS.add(mediaElement);
+    return;
+  }
 
   const mediaEl = mediaElement as any;
   if (mediaEl._webAudioSource || mediaEl._audioNode) {

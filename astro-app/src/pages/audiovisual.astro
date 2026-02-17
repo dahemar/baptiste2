@@ -1,11 +1,13 @@
 ---
 import '../styles/audiovisual.css';
+import { loadAudiovisualData } from '../utils/sectionContentManager';
 
-const placeholderItems = [
-  { id: 'av-1', title: 'audiovisual work 1', credits: 'credits — lorem ipsum dolor sit amet, consectetur adipiscing elit.', year: '2020' },
-  { id: 'av-2', title: 'audiovisual work 2', credits: 'credits — sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.', year: '2021' },
-  { id: 'av-3', title: 'audiovisual work 3', credits: 'credits — ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi.', year: '2023' }
-];
+let items = [];
+try {
+  items = await loadAudiovisualData();
+} catch {
+  items = [];
+}
 ---
 
 <!DOCTYPE html>
@@ -30,14 +32,28 @@ const placeholderItems = [
 
   <div class="av-page">
     <div class="av-list">
-      {placeholderItems.map(item => (
+      {items.map(item => (
         <div key={item.id} class="av-item">
           <div class="av-media">
-            <div class="av-placeholder" aria-label="placeholder" />
+            {item.videoUrl ? (
+              <video
+                class="av-video"
+                src={item.videoUrl}
+                poster={item.thumbnailUrl || undefined}
+                controls
+                preload="metadata"
+                playsinline
+                crossOrigin="anonymous"
+              />
+            ) : item.thumbnailUrl ? (
+              <img class="av-image" src={item.thumbnailUrl} alt={item.title} loading="lazy" />
+            ) : (
+              <div class="av-placeholder" aria-label="placeholder" />
+            )}
           </div>
           <div class="av-meta">
             <div class="av-name">{item.title}</div>
-            <div class="av-credits">{item.credits}</div>
+            {item.credits && <div class="av-credits">{item.credits}</div>}
             <div class="av-year">{item.year}</div>
           </div>
         </div>
