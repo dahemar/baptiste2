@@ -18,7 +18,7 @@ function isAllowedHost(hostname: string) {
       return hostname.startsWith(prefix);
     }
     return hostname === h;
-  });
+  }) || hostname.endsWith('.r2.dev');
 }
 
 const GLOBAL_KEY = '__dev_proxy_register_map__' as const;

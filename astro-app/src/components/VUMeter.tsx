@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import ReactDOM from 'react-dom';
 import './VUMeter.css';
 
 // Global Web Audio API context
@@ -97,9 +98,10 @@ interface VUMeterProps {
   videoRef?: React.RefObject<HTMLVideoElement | null>;
   currentWorkIndex: number;
   currentSceneIndex: number;
+  inCreditsPanel?: boolean;
 }
 
-export default function VUMeter({ videoRef, currentWorkIndex, currentSceneIndex }: VUMeterProps) {
+export default function VUMeter({ videoRef, currentWorkIndex, currentSceneIndex, inCreditsPanel = false }: VUMeterProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const waveformRef = useRef<HTMLCanvasElement>(null);
   const intervalRef = useRef<number | null>(null);
@@ -112,10 +114,10 @@ export default function VUMeter({ videoRef, currentWorkIndex, currentSceneIndex 
   };
 
   const ensureConnectedToPlayingVideo = () => {
-    const playingVideo = findPlayingVideo();
-    if (playingVideo && playingVideo !== lastActiveVideoRef.current) {
-      lastActiveVideoRef.current = playingVideo;
-      connectMediaToAnalyser(playingVideo);
+    const targetVideo = videoRef?.current ?? findPlayingVideo();
+    if (targetVideo && targetVideo !== lastActiveVideoRef.current) {
+      lastActiveVideoRef.current = targetVideo;
+      connectMediaToAnalyser(targetVideo);
     }
   };
 
@@ -166,7 +168,11 @@ export default function VUMeter({ videoRef, currentWorkIndex, currentSceneIndex 
     gradient.addColorStop(1, 'rgba(255, 255, 255, 0.9)');
     
     ctx.fillStyle = gradient;
-    ctx.fillRect(0, barY, width, barHeight);
+    if (barHeight <= 1) {
+      ctx.fillRect(0, height - 2, width, 2);
+    } else {
+      ctx.fillRect(0, barY, width, barHeight);
+    }
   };
 
   // Draw waveform
@@ -186,6 +192,16 @@ export default function VUMeter({ videoRef, currentWorkIndex, currentSceneIndex 
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
     ctx.lineWidth = 1;
     
+    if (!waveform.length) {
+      ctx.beginPath();
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+      ctx.lineWidth = 1;
+      ctx.moveTo(0, height / 2);
+      ctx.lineTo(width, height / 2);
+      ctx.stroke();
+      return;
+    }
+
     const sliceWidth = width / waveform.length;
     let x = 0;
     
@@ -284,10 +300,69 @@ export default function VUMeter({ videoRef, currentWorkIndex, currentSceneIndex 
     };
   }, [videoRef, currentWorkIndex, currentSceneIndex]);
 
-  return (
-    <div className="vumeter-container">
-      <canvas ref={canvasRef} className="vumeter-canvas" width="30" height="100" />
-      <canvas ref={waveformRef} className="waveform-canvas" width="150" height="80" />
+  if (typeof document === 'undefined') return null;
+
+  let containerStyle: React.CSSProperties = {
+    position: 'fixed',
+    bottom: '2rem',
+    right: '2rem',
+    width: 'calc(20% - 4rem)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '10px',
+    zIndex: 99999,
+    overflow: 'visible',
+    pointerEvents: 'none',
+  };
+
+  if (inCreditsPanel) {
+    // For in-panel mode we avoid absolute positioning to prevent clipping
+    // inside the panel's scrolling area. Styles will be provided by
+    // `.credits-vumeter` in CSS (sticky positioning).
+    containerStyle = {
+      display: 'flex',
+      justifyContent: 'flex-end',
+      gap: '10px',
+      pointerEvents: 'none',
+      width: '100%'
+    } as React.CSSProperties;
+  }
+
+  const vuCanvasStyle: React.CSSProperties = {
+    display: 'block',
+    background: 'transparent',
+    width: '30px',
+    height: '100px',
+    minWidth: '30px',
+    minHeight: '100px',
+  };
+
+  const waveformCanvasStyle: React.CSSProperties = {
+    display: 'block',
+    background: 'transparent',
+    width: '150px',
+    height: '80px',
+    minWidth: '150px',
+    minHeight: '80px',
+    flexShrink: 0,
+  };
+
+  const meterNode = (
+    <div className={`vumeter-container ${inCreditsPanel ? 'in-credits-panel' : ''}`} style={containerStyle}>
+      <canvas ref={canvasRef} className="vumeter-canvas" width="30" height="100" style={vuCanvasStyle} />
+      <canvas ref={waveformRef} className="waveform-canvas" width="150" height="80" style={waveformCanvasStyle} />
     </div>
   );
+
+  if (inCreditsPanel) {
+    // render inline inside credits panel
+    return (
+      <div className="credits-vumeter" style={containerStyle}>
+        {meterNode}
+      </div>
+    );
+  }
+
+  return ReactDOM.createPortal(meterNode, document.body);
 }

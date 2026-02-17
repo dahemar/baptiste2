@@ -7,7 +7,7 @@
   align-items: center;
   justify-content: center;
   gap: 10px;
-  z-index: 1600;
+  z-index: 99999; /* ensure visible above player layers */
   overflow: visible;
 }
 
@@ -36,4 +36,8 @@
   .vumeter-container {
     display: none;
   }
+}
+
+@media (min-width: 769px) {
+  .vumeter-container { display: flex !important; }
 }

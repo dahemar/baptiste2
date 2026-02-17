@@ -18,7 +18,7 @@ function isAllowedHost(hostname: string) {
       return hostname.startsWith(prefix);
     }
     return hostname === h;
-  });
+  }) || hostname.endsWith('.r2.dev');
 }
 
 // In-memory map only used in DEV. Stored on global to survive HMR reloads.

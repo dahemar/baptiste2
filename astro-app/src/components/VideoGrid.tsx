@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import VideoPlayer from './VideoPlayer';
 import CreditsPanel from './CreditsPanel';
-import VUMeter from './VUMeter';
 
 function isDebugSpacingEnabled() {
   try {
@@ -748,6 +747,18 @@ export default function VideoGrid({ works }: VideoGridProps) {
     };
   }, [isMobile, isPlaying, currentWorkIndex, currentSceneIndex, works, resolveScenePoster]);
 
+  // Listen for global closePlayer event (emitted by nav back button) to close mobile modal
+  useEffect(() => {
+    const handler = () => {
+      try {
+        forcePauseMobileVideo();
+        setIsPlaying(false);
+      } catch (e) {}
+    };
+    document.addEventListener('closePlayer', handler as EventListener);
+    return () => document.removeEventListener('closePlayer', handler as EventListener);
+  }, [forcePauseMobileVideo]);
+
   // Keyboard navigation
   useEffect(() => {
     if (isMobile) return;
@@ -859,17 +870,22 @@ export default function VideoGrid({ works }: VideoGridProps) {
               showArrowsForAWhile();
             }}
           >
-            {/* Back button - direct child of modal, always visible */}
-            <button
-              className="back-button"
-              aria-label="Back"
-              onClick={() => {
-                forcePauseMobileVideo();
-                setIsPlaying(false);
-              }}
-            >
-              ⟵
-            </button>
+              {/* Modal-specific navigation bar (decoupled from main site nav) */}
+              <div className="modal-nav">
+                <button
+                  className="nav-back-button modal-nav-back"
+                  aria-label="Close player"
+                  type="button"
+                  onClick={() => {
+                    try {
+                      forcePauseMobileVideo();
+                      setIsPlaying(false);
+                    } catch (e) {}
+                  }}
+                >
+                  ⟵
+                </button>
+              </div>
 
             {/* Video wrapper with scene navigation arrows overlaid */}
             <div className="video-wrapper">
@@ -940,6 +956,7 @@ export default function VideoGrid({ works }: VideoGridProps) {
               >
                 <video
                   ref={mobileFixedVideoRef}
+                  crossOrigin="anonymous"
                   poster={resolveScenePoster(currentWorkIndex, currentSceneIndex, works[currentWorkIndex]?.scenes?.[currentSceneIndex])}
                   loop
                   playsInline
@@ -1029,6 +1046,7 @@ export default function VideoGrid({ works }: VideoGridProps) {
                       {firstScene ? (
                         <video
                           src={firstScene.proxiedVideoUrl ?? firstScene.videoUrl}
+                          crossOrigin="anonymous"
                           poster={resolveScenePoster(workIdx, 0, firstScene)}
                           playsInline
                           preload="metadata"
@@ -1114,6 +1132,7 @@ export default function VideoGrid({ works }: VideoGridProps) {
                           ? (scene.proxiedVideoUrl ?? scene.videoUrl)
                           : undefined
                       }
+                      crossOrigin="anonymous"
                       poster={resolveScenePoster(workIdx, sceneIdx, scene)}
                       playsInline
                       preload={
@@ -1148,16 +1167,10 @@ export default function VideoGrid({ works }: VideoGridProps) {
         isVisible={creditsVisible && !isMobile}
         title={currentWork?.title || ''}
         credits={credits}
+        videoRef={activeVideoRef}
+        currentWorkIndex={currentWorkIndex}
+        currentSceneIndex={currentSceneIndex}
       />
-
-      {/* VU Meter - solo cuando se está reproduciendo */}
-      {isPlaying && !isMobile && (
-        <VUMeter
-          videoRef={activeVideoRef}
-          currentWorkIndex={currentWorkIndex}
-          currentSceneIndex={currentSceneIndex}
-        />
-      )}
     </>
   );
 }

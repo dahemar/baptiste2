@@ -34,14 +34,14 @@ export const GET: APIRoute = async (context) => {
   try {
     const u = new URL(target);
     const hostname = u.hostname;
-    // Basic allowlist check
+    // Basic allowlist check (allow r2.dev hosts)
     const allowed = ALLOWED_HOSTS.some(h => {
       if (h.includes('*')) {
         const prefix = h.split('*')[0];
         return hostname.startsWith(prefix);
       }
       return hostname === h;
-    });
+    }) || hostname.endsWith('.r2.dev');
     if (!allowed) return new Response('Host not allowed', { status: 403 });
 
     // Forward Range header if present so browsers can seek / partial requests
@@ -108,7 +108,7 @@ export const HEAD: APIRoute = async (context) => {
         return hostname.startsWith(prefix);
       }
       return hostname === h;
-    });
+    }) || hostname.endsWith('.r2.dev');
     if (!allowed) return new Response('Host not allowed', { status: 403 });
 
     const res = await fetch(target, { method: 'HEAD', redirect: 'follow' });

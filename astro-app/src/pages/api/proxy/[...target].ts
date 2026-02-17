@@ -22,7 +22,7 @@ function isAllowedHost(hostname: string) {
       return hostname.startsWith(prefix);
     }
     return hostname === h;
-  });
+  }) || hostname.endsWith('.r2.dev');
 }
 
 function base64urlToString(s: string) {

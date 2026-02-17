@@ -67,6 +67,26 @@ body {
   box-sizing: border-box;
 }
 
+/* Nav back button (mobile modal) - hidden by default, shown when player modal active */
+.nav-back-button {
+  display: none;
+  position: fixed;
+  left: 1rem;
+  top: calc(env(safe-area-inset-top) + (var(--nav-height) - 44px) / 2);
+  width: 44px;
+  height: 44px;
+  background: rgba(0,0,0,0.6);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  z-index: 2147483647;
+  pointer-events: auto;
+}
+
 .nav-link {
   color: #999;
   text-decoration: none;
@@ -590,34 +610,7 @@ body {
   height: 100dvh;
 }
 
-/* Back button - direct child of modal, always visible */
-.mobile-fixed-player .back-button {
-  position: absolute;
-  /* moved down 14px from original +8 => +22 */
-  top: calc(env(safe-area-inset-top) + 22px);
-  left: 12px;
-  /* remove grey container/background for a clean overlay */
-  background: transparent;
-  color: #fff;
-  border: none;
-  width: 44px;
-  height: 44px;
-  border-radius: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.5rem;
-  cursor: pointer;
-  transition: none;
-  opacity: 1;
-  pointer-events: auto;
-  z-index: 2000;
-}
-
-.mobile-fixed-player .back-button:active {
-  /* no active background */
-  background: transparent;
-}
+/* Back button removed */
 
 /* Video wrapper */
 .mobile-fixed-player .video-wrapper {
@@ -643,7 +636,7 @@ body {
 .mobile-fixed-player .project-nav-controls {
   position: absolute;
   /* Lower controls 20px to avoid overlap and match credits panel extension */
-  bottom: calc(env(safe-area-inset-bottom) + 1rem - 20px);
+  bottom: calc(env(safe-area-inset-bottom) + 1rem + 20px);
   left: 1rem;
   right: 1rem;
   display: flex;
@@ -1093,11 +1086,11 @@ body {
     height: 100%;
     object-fit: cover;
     display: block;
-    margin-top: 76px; /* bajar el vídeo 80px en el modal móvil (ajustado -4px) */
+    margin-top: -76px; /* subir el vídeo 76px en el modal móvil */
   }
   .mobile-fixed-player .nav-arrow {
     position: absolute;
-    top: calc(50% + 76px);
+    top: 50%;
     transform: translateY(-50%);
     border: none;
     background: none;
@@ -1137,20 +1130,40 @@ body {
     flex-direction: column;
     align-items: stretch;
     justify-content: flex-start;
-    z-index: 1120;
+    z-index: 3000;
+  }
+
+  /* Sync modal nav position with player when active */
+  body.player-mode-active .modal-nav {
+    top: var(--nav-height);
   }
 
   body.player-mode-active .mobile-fixed-player .video-wrapper {
     width: 100%;
     flex: 0 0 auto;
     aspect-ratio: 16 / 9;
+    margin-top: -10px; /* subir vídeo 10px */
   }
 
   body.player-mode-active .mobile-fixed-player .credits-panel {
     flex: 1;
     min-height: 0;
     padding-bottom: calc(156px + env(safe-area-inset-bottom)); /* +20px adicionales reales */
+    margin-top: -80px; /* subir créditos 80px en player-mode (extendido 4px) */
   }
+
+  /* Keep video content aligned inside wrapper */
+  body.player-mode-active .mobile-fixed-player video {
+    margin-top: 0 !important;
+  }
+
+  /* Keep mobile < > arrows at exact vertical middle of the video area */
+  body.player-mode-active .mobile-fixed-player .video-wrapper .nav-arrow {
+    top: 50%;
+    transform: translateY(-50%);
+  }
+
+  /* Back button removed */
 
   body.player-mode-active {
     overflow: hidden;
@@ -1171,16 +1184,18 @@ body {
 }
 
 /* Player mode: keep nav background immediate; animate only labels */
+/* Hide the main site nav entirely while the modal player is active */
 body.player-mode-active .main-nav {
-  opacity: 1;
+  display: none !important;
   pointer-events: none;
-  transition: none;
 }
 
 @media (max-width: 768px) {
   .main-nav .nav-link {
     transition: opacity 0.16s ease, filter 0.16s ease, color 0.2s ease;
   }
+
+  /* main nav back button hidden in theatre-works; modal provides its own nav */
 
   body.player-mode-active .main-nav .nav-link {
     opacity: 0;
@@ -1195,6 +1210,50 @@ body.player-mode-active .main-nav {
 
 body.player-mode-active .main-content {
   padding-top: 0;
+}
+
+/* Modal-specific nav (decoupled from main site nav) */
+.modal-nav {
+  display: none;
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  pointer-events: none;
+  z-index: 9999;
+}
+.mobile-fixed-player .modal-nav {
+  display: block;
+  pointer-events: auto;
+}
+/* `.modal-nav-container` removed — modal uses direct children under `.modal-nav` */
+.modal-nav .nav-back-button {
+  display: inline-flex;
+  position: relative;
+  left: 0;
+  top: -45px; /* bajar 5px desde -50px */
+  background: transparent;
+  color: #fff;
+  border: none;
+  padding: 0 6px; /* añadir espacio lateral para clic objetivo */
+  width: auto;
+  height: auto;
+  border-radius: 0;
+  left: 13px; /* separa del borde izquierdo (moved 1px right) */
+  align-items: center;
+  justify-content: center;
+  font-size: 1.35rem;
+  line-height: 1;
+  z-index: 10000;
+  pointer-events: auto;
+}
+
+/* Keep modal back button accessible on small screens */
+@media (max-width: 768px) {
+  .mobile-fixed-player .modal-nav .nav-back-button {
+    display: flex;
+  }
+}
   min-height: 100vh;
 }
 

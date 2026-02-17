@@ -515,17 +515,7 @@ function parseTheatreWorks(rawValues: string[][]): any[] {
     const thumb = deriveThumbnailFromVideoUrl(videoUrl);
 
     // Provide an optional proxied video URL for hosts that block CORS so dev can proxy through the server
-    let proxiedVideoUrl: string | undefined = undefined;
-    try {
-      const u = new URL(videoUrl);
-      if (
-        ['github.com', 'release-assets.githubusercontent.com'].includes(u.hostname) ||
-        u.hostname.endsWith('.s3.amazonaws.com')
-      ) {
-        // Use path-encoded form to avoid query parsing issues in dev proxy
-        proxiedVideoUrl = `/api/proxy/${encodeURIComponent(videoUrl)}`;
-      }
-    } catch {}
+    const proxiedVideoUrl = toProxiedVideoUrl(videoUrl);
 
     // Prefer proxied path URL as the canonical `videoUrl` so client-side uses the safe form
     const canonicalVideoUrl = proxiedVideoUrl ?? videoUrl;
@@ -547,6 +537,47 @@ function normalizeVideoUrl(url: string): string {
   if (!url) return '';
   if (!url.startsWith('http') && !url.startsWith('/')) return `/${url}`;
   return url;
+}
+
+function shouldProxyHost(hostname: string): boolean {
+  return (
+    ['github.com', 'release-assets.githubusercontent.com'].includes(hostname) ||
+    hostname.endsWith('.s3.amazonaws.com') ||
+    hostname.endsWith('.r2.dev')
+  );
+}
+
+function toProxiedVideoUrl(videoUrl: string): string | undefined {
+  if (!videoUrl || typeof videoUrl !== 'string') return undefined;
+  if (videoUrl.startsWith('/api/proxy/')) return videoUrl;
+  try {
+    const u = new URL(videoUrl);
+    if (!shouldProxyHost(u.hostname)) return undefined;
+    return `/api/proxy/${encodeURIComponent(videoUrl)}`;
+  } catch {
+    return undefined;
+  }
+}
+
+function normalizeWorksVideoUrls<T extends any[]>(works: T): T {
+  return (works || []).map((work: any) => {
+    const scenes = Array.isArray(work?.scenes) ? work.scenes : [];
+    const normalizedScenes = scenes.map((scene: any) => {
+      const rawVideoUrl = typeof scene?.videoUrl === 'string' ? scene.videoUrl : '';
+      const existingProxied = typeof scene?.proxiedVideoUrl === 'string' ? scene.proxiedVideoUrl : undefined;
+      const proxiedVideoUrl = existingProxied || toProxiedVideoUrl(rawVideoUrl);
+      return {
+        ...scene,
+        videoUrl: proxiedVideoUrl || rawVideoUrl,
+        proxiedVideoUrl,
+      };
+    });
+
+    return {
+      ...work,
+      scenes: normalizedScenes,
+    };
+  }) as T;
 }
 
 function normalizeCandidatesFromBase(base: string): string[] {
@@ -648,20 +679,7 @@ export async function loadTheatreWorksData(options?: { force?: boolean }) {
     try {
       const cached = await loadFromCache();
       if (Array.isArray(cached) && cached.length > 0) {
-        // Check if cache is stale.
-        const firstScene = cached[0]?.scenes?.[0];
-        const hasR2ThroughProxy = !!(
-          firstScene &&
-          typeof firstScene.videoUrl === 'string' &&
-          firstScene.videoUrl.startsWith('/api/proxy/') &&
-          decodeURIComponent(firstScene.videoUrl.replace('/api/proxy/', '')).includes('.r2.dev')
-        );
-        const isStale = !firstScene || !firstScene.thumbnail || hasR2ThroughProxy;
-        if (isStale) {
-          console.warn('loadTheatreWorksData: cache appears stale (missing thumbnail or old R2 proxy), forcing refresh');
-        } else {
-          return cached;
-        }
+        return normalizeWorksVideoUrls(cached);
       }
     } catch (e) {
       console.warn('loadTheatreWorksData: loadFromCache failed', (e as any)?.message ?? e);
@@ -670,7 +688,7 @@ export async function loadTheatreWorksData(options?: { force?: boolean }) {
 
   try {
     const fetched = await fetchFromGoogleSheets();
-    if (Array.isArray(fetched) && fetched.length > 0) return fetched;
+    if (Array.isArray(fetched) && fetched.length > 0) return normalizeWorksVideoUrls(fetched);
   } catch (e) {
     console.warn('loadTheatreWorksData: fetchFromGoogleSheets failed', (e as any)?.message ?? e);
   }
@@ -690,7 +708,7 @@ export async function loadTheatreWorksData(options?: { force?: boolean }) {
   // Final fallback to cache (may be empty array)
   try {
     const fallback = await loadFromCache();
-    if (Array.isArray(fallback)) return fallback;
+    if (Array.isArray(fallback)) return normalizeWorksVideoUrls(fallback);
   } catch (e) {
     // ignore
   }

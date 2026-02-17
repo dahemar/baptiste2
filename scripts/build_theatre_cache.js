@@ -163,7 +163,13 @@ function parseTheatreWorks(rawValues) {
     let proxiedVideoUrl = undefined;
     try {
       const u = new URL(videoUrl);
-      if (['github.com', 'release-assets.githubusercontent.com'].includes(u.hostname) || u.hostname.endsWith('.s3.amazonaws.com')) {
+      // Proxy certain hosts (GitHub release assets, S3 and R2) through /api/proxy for dev CORS
+      if (
+        ['github.com', 'release-assets.githubusercontent.com'].includes(u.hostname) ||
+        u.hostname.endsWith('.s3.amazonaws.com') ||
+        u.hostname.endsWith('.r2.dev') ||
+        u.hostname.includes('r2.dev')
+      ) {
         proxiedVideoUrl = `/api/proxy?url=${encodeURIComponent(videoUrl)}`;
       }
     } catch (e) {}

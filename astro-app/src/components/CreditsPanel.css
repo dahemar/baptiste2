@@ -17,6 +17,17 @@
   transition: none;
 }
 
+/* Allow VU meter to stick inside credits panel without being clipped */
+.credits-panel .credits-vumeter {
+  position: sticky;
+  top: 1rem;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  pointer-events: none;
+  z-index: 1201;
+}
+
 .credits-panel.hidden {
   transform: translateX(100%);
   transition: transform 0.3s ease;
@@ -143,7 +154,7 @@
   /* When credits are visible in the mobile fixed player, lift the panel 4px
      so it overlaps the video slightly (removes small gap/stripe) */
   .mobile-fixed-player .credits-panel.visible {
-    margin-top: -4px;
+    margin-top: -84px; /* subir créditos 76px + 4px extra (pedido móvil) */
     z-index: 3;
   }
 
