@@ -139,6 +139,13 @@
     position: relative;
   }
 
+  /* When credits are visible in the mobile fixed player, lift the panel 4px
+     so it overlaps the video slightly (removes small gap/stripe) */
+  .mobile-fixed-player .credits-panel.visible {
+    margin-top: -4px;
+    z-index: 3;
+  }
+
   .mobile-fixed-player .credits-bottom-fade {
     display: block;
     position: sticky;
