@@ -842,7 +842,7 @@ export default function VideoGrid({ works }: VideoGridProps) {
   if (isMobile) {
     // Mobile: vertical list layout
     return (
-      <div className="scene-grid mobile">
+      <div className={`scene-grid mobile ${isPlaying ? 'mobile-player-active' : ''}`}>
         {isPlaying && currentWorkIndex !== null && currentSceneIndex !== null && (
           <div
             className="mobile-fixed-player"

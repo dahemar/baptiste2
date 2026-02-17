@@ -939,6 +939,17 @@ body {
     -webkit-touch-callout: none;
   }
 
+  /* Player mode behaves like an independent page on mobile */
+  .scene-grid.mobile.mobile-player-active {
+    position: fixed;
+    inset: 0;
+    z-index: 1080;
+    background: #1a1a1a;
+    overflow: hidden;
+    contain: layout paint style;
+    isolation: isolate;
+  }
+
   .mobile-list {
     display: flex;
     flex-direction: column;
@@ -1115,7 +1126,35 @@ body {
   .mobile-fixed-player .edge-tap-zone.left { left: 0; }
   .mobile-fixed-player .edge-tap-zone.right { right: 0; }
 
-  body.player-mode-active .mobile-fixed-player { bottom: 48dvh; }
+  body.player-mode-active .mobile-fixed-player {
+    top: var(--nav-height);
+    bottom: 0;
+    height: calc(100dvh - var(--nav-height));
+    width: 100vw;
+    aspect-ratio: auto;
+    margin-top: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    z-index: 1120;
+  }
+
+  body.player-mode-active .mobile-fixed-player .video-wrapper {
+    width: 100%;
+    flex: 0 0 auto;
+    aspect-ratio: 16 / 9;
+  }
+
+  body.player-mode-active .mobile-fixed-player .credits-panel {
+    flex: 1;
+    min-height: 0;
+    padding-bottom: calc(156px + env(safe-area-inset-bottom)); /* +20px adicionales reales */
+  }
+
+  body.player-mode-active {
+    overflow: hidden;
+  }
 
   .work-title {
     font-size: 1.4rem;
