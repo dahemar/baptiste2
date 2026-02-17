@@ -388,7 +388,11 @@ function parseTheatreWorks(rawValues: string[][]): any[] {
     let proxiedVideoUrl: string | undefined = undefined;
     try {
       const u = new URL(videoUrl);
-      if (['github.com', 'release-assets.githubusercontent.com'].includes(u.hostname) || u.hostname.endsWith('.s3.amazonaws.com')) {
+      if (
+        ['github.com', 'release-assets.githubusercontent.com'].includes(u.hostname) ||
+        u.hostname.endsWith('.s3.amazonaws.com') ||
+        u.hostname.endsWith('.r2.dev')
+      ) {
         // Use path-encoded form to avoid query parsing issues in dev proxy
         proxiedVideoUrl = `/api/proxy/${encodeURIComponent(videoUrl)}`;
       }
@@ -517,7 +521,13 @@ export async function loadTheatreWorksData(options?: { force?: boolean }) {
       if (Array.isArray(cached) && cached.length > 0) {
         // Check if cache is stale: scenes should have proxiedVideoUrl and thumbnail
         const firstScene = cached[0]?.scenes?.[0];
-        const isStale = firstScene && !firstScene.proxiedVideoUrl && !firstScene.thumbnail;
+        const hasR2WithoutProxy = !!(
+          firstScene &&
+          typeof firstScene.videoUrl === 'string' &&
+          firstScene.videoUrl.includes('.r2.dev') &&
+          !firstScene.proxiedVideoUrl
+        );
+        const isStale = (firstScene && !firstScene.proxiedVideoUrl && !firstScene.thumbnail) || hasR2WithoutProxy;
         if (isStale) {
           console.warn('loadTheatreWorksData: cache appears stale (no proxiedVideoUrl/thumbnail), forcing refresh');
         } else {

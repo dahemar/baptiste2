@@ -49,7 +49,8 @@ const ALLOWED_HOSTS = [
   'github-production-release-asset-2e65be.s3.amazonaws.com',
   'github-production-release-asset-*.s3.amazonaws.com',
   'github-cloud.s3.amazonaws.com',
-  'raw.githubusercontent.com'
+  'raw.githubusercontent.com',
+  'pub-16fb774f4ada4a69b6c70bc856201eeb.r2.dev'
 ];
 
 function isAllowedHost(hostname: string) {

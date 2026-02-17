@@ -15,7 +15,7 @@ export const GET: APIRoute = async (context) => {
       try { clearMemoryCache(); } catch (e) { /* ignore */ }
     }
 
-    const cached = await loadFromCache();
+    const cached = force === '1' ? null : await loadFromCache();
     if (cached && Array.isArray(cached) && cached.length > 0) {
       try {
         console.log('[api/theatre-works] returning cached works count=', cached.length, 'sample=', JSON.stringify(cached[0]));
