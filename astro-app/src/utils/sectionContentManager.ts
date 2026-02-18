@@ -2,6 +2,8 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import * as fsSync from 'node:fs';
 
+const IS_VERCEL_RUNTIME = !!process.env.VERCEL;
+
 type Row = Record<string, string>;
 
 export interface MusicRelease {
@@ -168,26 +170,53 @@ async function tryReadLocalCsv(fileName: string): Promise<string[][] | null> {
   return null;
 }
 
+async function tryFetchGvizTab(tabName: string): Promise<string[][] | null> {
+  const sheetId = getSheetId();
+  if (!sheetId || !tabName) return null;
+  const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tabName)}`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10000);
+  try {
+    const res = await fetch(url, { signal: controller.signal });
+    if (!res.ok) return null;
+    const text = await res.text();
+    const rows = parseCsvRows(text);
+    return rows.length > 1 ? rows : null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 async function loadSectionRows(options: {
   cacheKey: string;
   rangeNames: string[];
+  gvizTabName: string;
   csvUrlEnvVar: string;
   localFileName: string;
 }): Promise<Row[]> {
-  if (memoryCache.has(options.cacheKey)) {
+  // On Vercel: always load fresh from Sheets — no disk or memory cache
+  if (!IS_VERCEL_RUNTIME && memoryCache.has(options.cacheKey)) {
     return memoryCache.get(options.cacheKey) as Row[];
   }
 
-  let rows = await tryFetchFirstAvailableRange(options.rangeNames);
-  if (!rows) {
-    rows = await tryFetchCsvUrl(process.env[options.csvUrlEnvVar]);
-  }
-  if (!rows) {
-    rows = await tryReadLocalCsv(options.localFileName);
-  }
+  let rows: string[][] | null = null;
+
+  // 1) Google Sheets API (requires API key)
+  if (!rows) rows = await tryFetchFirstAvailableRange(options.rangeNames);
+
+  // 2) gviz CSV export (keyless, public sheet)
+  if (!rows) rows = await tryFetchGvizTab(options.gvizTabName);
+
+  // 3) CSV URL from env
+  if (!rows) rows = await tryFetchCsvUrl(process.env[options.csvUrlEnvVar]);
+
+  // 4) Local CSV fallback (disabled on Vercel)
+  if (!rows && !IS_VERCEL_RUNTIME) rows = await tryReadLocalCsv(options.localFileName);
 
   const mapped = mapRows(rows || []);
-  memoryCache.set(options.cacheKey, mapped);
+  if (!IS_VERCEL_RUNTIME) memoryCache.set(options.cacheKey, mapped);
   return mapped;
 }
 
@@ -197,13 +226,11 @@ export async function loadMusicData(): Promise<{ allReleasesUrl: string; release
     cacheKey: 'music',
     rangeNames: [
       envRange || '',
-      'MUSIC',
       'music',
+      'MUSIC',
       'Music',
-      'baptiste - music',
-      'Baptiste - Music',
-      'music.csv',
-    ],
+    ].filter(Boolean),
+    gvizTabName: 'music',
     csvUrlEnvVar: 'MUSIC_CSV_URL',
     localFileName: 'music.csv',
   });
@@ -234,13 +261,11 @@ export async function loadAudiovisualData(): Promise<AudiovisualWork[]> {
     cacheKey: 'audiovisual',
     rangeNames: [
       envRange || '',
-      'AUDIOVISUAL',
       'audiovisual',
+      'AUDIOVISUAL',
       'Audiovisual',
-      'baptiste - audiovisual',
-      'Baptiste - Audiovisual',
-      'audiovisual.csv',
-    ],
+    ].filter(Boolean),
+    gvizTabName: 'audiovisual',
     csvUrlEnvVar: 'AUDIOVISUAL_CSV_URL',
     localFileName: 'audiovisual.csv',
   });
