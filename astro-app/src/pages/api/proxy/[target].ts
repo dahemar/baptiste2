@@ -50,8 +50,28 @@ const ALLOWED_HOSTS = [
   'github-production-release-asset-*.s3.amazonaws.com',
   'github-cloud.s3.amazonaws.com',
   'raw.githubusercontent.com',
-  'pub-16fb774f4ada4a69b6c70bc856201eeb.r2.dev'
+  // Old R2.dev domain (source account)
+  'pub-16fb774f4ada4a69b6c70bc856201eeb.r2.dev',
+  // New R2.dev domain (destination account)
+  'pub-f04cf0f8494f457e889559aa0b6e57b7.r2.dev'
 ];
+
+const OLD_R2_PUBLIC_HOST = 'pub-16fb774f4ada4a69b6c70bc856201eeb.r2.dev';
+const NEW_R2_PUBLIC_HOST = 'pub-f04cf0f8494f457e889559aa0b6e57b7.r2.dev';
+
+function rewriteR2PublicUrlIfNeeded(target: string): string {
+  try {
+    const u = new URL(target);
+    if (u.hostname === OLD_R2_PUBLIC_HOST) {
+      u.hostname = NEW_R2_PUBLIC_HOST;
+      u.protocol = 'https:';
+      return u.toString();
+    }
+  } catch {
+    // ignore
+  }
+  return target;
+}
 
 function isAllowedHost(hostname: string) {
   return ALLOWED_HOSTS.some(h => {
@@ -128,6 +148,8 @@ export const GET: APIRoute = async ({ params, request }) => {
     }
   }
 
+  target = rewriteR2PublicUrlIfNeeded(target);
+
   console.log('[api/proxy] proxying GET', { target });
 
   try {
@@ -201,6 +223,8 @@ export const HEAD: APIRoute = async ({ params }) => {
       return new Response(String(e2?.message ?? e2), { status: 400 });
     }
   }
+
+  target = rewriteR2PublicUrlIfNeeded(target);
 
   console.log('[api/proxy] proxying HEAD', { target });
 

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-R2_URL="https://pub-16fb774f4ada4a69b6c70bc856201eeb.r2.dev"
+R2_URL="https://pub-f04cf0f8494f457e889559aa0b6e57b7.r2.dev"
 TEMP_DIR="/tmp/r2-thumbnails"
 mkdir -p "$TEMP_DIR"
 

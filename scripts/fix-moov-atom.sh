@@ -7,7 +7,7 @@ set -e
 AWS_PROFILE="r2"
 R2_BUCKET="baptiste-videos"
 R2_ENDPOINT="https://7305104bf22993d080aa24f59e6a8465.r2.cloudflarestorage.com"
-PUBLIC_URL="https://pub-16fb774f4ada4a69b6c70bc856201eeb.r2.dev"
+PUBLIC_URL="https://pub-f04cf0f8494f457e889559aa0b6e57b7.r2.dev"
 
 echo "🔧 Fixing moov atom position in ALL MP4 videos..."
 echo "📊 This will process ~1.71GB of video files"

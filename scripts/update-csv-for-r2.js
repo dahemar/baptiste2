@@ -12,7 +12,7 @@ const BUCKET_NAME = 'baptiste-videos';
 const ACCOUNT_ID = '7305104bf22993d080aa24f59e6a8465';
 
 // R2 public URL
-const R2_PUBLIC_URL = 'https://pub-16fb774f4ada4a69b6c70bc856201eeb.r2.dev';
+const R2_PUBLIC_URL = 'https://pub-f04cf0f8494f457e889559aa0b6e57b7.r2.dev';
 
 console.log('Updating CSV to use R2 URLs...');
 console.log('CSV path:', CSV_PATH);

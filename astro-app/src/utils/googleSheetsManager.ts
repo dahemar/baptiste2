@@ -5,7 +5,46 @@ import crypto from 'node:crypto';
 
 const CACHE_PATH = path.resolve(process.cwd(), '.cache/theatre-works.json');
 
+// In Vercel runtime we want the canonical source of truth to be Google Sheets.
+// Avoid shipping/using stale on-disk caches or local CSV fallbacks.
+const IS_VERCEL_RUNTIME = !!process.env.VERCEL;
+
+const OLD_R2_PUBLIC_HOST = 'pub-16fb774f4ada4a69b6c70bc856201eeb.r2.dev';
+const NEW_R2_PUBLIC_HOST = 'pub-f04cf0f8494f457e889559aa0b6e57b7.r2.dev';
+
+function rewriteR2PublicUrl(url: string): string {
+  if (!url || typeof url !== 'string') return url;
+  try {
+    const u = new URL(url);
+    if (u.hostname === OLD_R2_PUBLIC_HOST) {
+      u.hostname = NEW_R2_PUBLIC_HOST;
+      u.protocol = 'https:';
+      return u.toString();
+    }
+    return url;
+  } catch {
+    return url;
+  }
+}
+
+function rewritePossiblyProxiedVideoUrl(url: string): string {
+  if (!url || typeof url !== 'string') return url;
+  if (url.startsWith('/api/proxy/')) {
+    const encoded = url.slice('/api/proxy/'.length);
+    try {
+      const decoded = decodeURIComponent(encoded);
+      const rewritten = rewriteR2PublicUrl(decoded);
+      if (rewritten !== decoded) return `/api/proxy/${encodeURIComponent(rewritten)}`;
+    } catch {
+      // leave as-is
+    }
+    return url;
+  }
+  return rewriteR2PublicUrl(url);
+}
+
 export async function loadFromCache() {
+  if (IS_VERCEL_RUNTIME) return null;
   try {
     const raw = await fs.readFile(CACHE_PATH, 'utf-8');
     const parsed = JSON.parse(raw);
@@ -22,6 +61,7 @@ export async function loadFromCache() {
 }
 
 export async function saveToCache(data: unknown) {
+  if (IS_VERCEL_RUNTIME) return;
   await fs.mkdir(path.dirname(CACHE_PATH), { recursive: true });
   await fs.writeFile(CACHE_PATH, JSON.stringify(data, null, 2), 'utf-8');
 }
@@ -128,7 +168,7 @@ async function loadSimplifiedTheatreRowsFromCsv(): Promise<string[][] | null> {
 export async function fetchFromGoogleSheets(): Promise<any[]> {
   const CACHE_KEY = 'theatreWorks';
   // Return cached value if present
-  if (cache.has(CACHE_KEY)) {
+  if (!IS_VERCEL_RUNTIME && cache.has(CACHE_KEY)) {
     const cached = cache.get(CACHE_KEY);
     if (Array.isArray(cached) && cached.length > 0) return cached;
   }
@@ -258,8 +298,9 @@ export async function fetchFromGoogleSheets(): Promise<any[]> {
     }
   }
 
-  // 2b) Fallback: try loading from local CSV file if Google Sheets returned nothing
-  if (!Array.isArray(rows) || rows.length === 0) {
+  // 2b) Fallback: try loading from local CSV file if Google Sheets returned nothing.
+  // Disabled on Vercel runtime to ensure data is always sourced dynamically from Google Sheets.
+  if (!IS_VERCEL_RUNTIME && (!Array.isArray(rows) || rows.length === 0)) {
     console.log('fetchFromGoogleSheets: trying local CSV fallback');
 
     rows = await loadSimplifiedTheatreRowsFromCsv();
@@ -308,9 +349,11 @@ export async function fetchFromGoogleSheets(): Promise<any[]> {
   if (Array.isArray(rows) && Array.isArray(rows[0]) && rows.some(r => Array.isArray(r) && String(r[0] || '').toUpperCase() === 'WORKS')) {
     try {
       parsed = parseTheatreWorks(rows as string[][]);
-      // persist and return early
-      cache.set(CACHE_KEY, parsed);
-      try { await saveToCache(parsed); } catch (e) { console.warn('fetchFromGoogleSheets: saveToCache failed', e); }
+      // persist and return early (disabled on Vercel runtime)
+      if (!IS_VERCEL_RUNTIME) {
+        cache.set(CACHE_KEY, parsed);
+        try { await saveToCache(parsed); } catch (e) { console.warn('fetchFromGoogleSheets: saveToCache failed', e); }
+      }
       return parsed;
     } catch (e) {
       console.warn('fetchFromGoogleSheets: parseTheatreWorks failed, falling back', (e as any)?.message ?? e);
@@ -339,9 +382,11 @@ export async function fetchFromGoogleSheets(): Promise<any[]> {
     });
   }
 
-  // 4) Cache and persist
-  cache.set(CACHE_KEY, parsed);
-  try { await saveToCache(parsed); } catch (e) { console.warn('fetchFromGoogleSheets: saveToCache failed', e); }
+  // 4) Cache and persist (disabled on Vercel runtime)
+  if (!IS_VERCEL_RUNTIME) {
+    cache.set(CACHE_KEY, parsed);
+    try { await saveToCache(parsed); } catch (e) { console.warn('fetchFromGoogleSheets: saveToCache failed', e); }
+  }
 
   return parsed;
 }
@@ -535,8 +580,9 @@ function parseTheatreWorks(rawValues: string[][]): any[] {
 
 function normalizeVideoUrl(url: string): string {
   if (!url) return '';
-  if (!url.startsWith('http') && !url.startsWith('/')) return `/${url}`;
-  return url;
+  const rewritten = rewritePossiblyProxiedVideoUrl(url);
+  if (!rewritten.startsWith('http') && !rewritten.startsWith('/')) return `/${rewritten}`;
+  return rewritten;
 }
 
 function shouldProxyHost(hostname: string): boolean {
@@ -563,8 +609,9 @@ function normalizeWorksVideoUrls<T extends any[]>(works: T): T {
   return (works || []).map((work: any) => {
     const scenes = Array.isArray(work?.scenes) ? work.scenes : [];
     const normalizedScenes = scenes.map((scene: any) => {
-      const rawVideoUrl = typeof scene?.videoUrl === 'string' ? scene.videoUrl : '';
-      const existingProxied = typeof scene?.proxiedVideoUrl === 'string' ? scene.proxiedVideoUrl : undefined;
+      const rawVideoUrl = typeof scene?.videoUrl === 'string' ? rewritePossiblyProxiedVideoUrl(scene.videoUrl) : '';
+      const existingProxiedRaw = typeof scene?.proxiedVideoUrl === 'string' ? scene.proxiedVideoUrl : undefined;
+      const existingProxied = existingProxiedRaw ? rewritePossiblyProxiedVideoUrl(existingProxiedRaw) : undefined;
       const proxiedVideoUrl = existingProxied || toProxiedVideoUrl(rawVideoUrl);
       return {
         ...scene,
@@ -674,6 +721,20 @@ function deriveThumbnailFromVideoUrl(videoUrl: string): string | undefined {
 // Convenience wrapper expected by older code: load theatre works from cache then Google Sheets
 export async function loadTheatreWorksData(options?: { force?: boolean }) {
   const force = !!(options && options.force);
+
+  // On Vercel, always hit Google Sheets (no disk cache, no local CSV fallbacks).
+  if (IS_VERCEL_RUNTIME) {
+    if (force) {
+      try { clearMemoryCache(); } catch { /* ignore */ }
+    }
+    try {
+      const fetched = await fetchFromGoogleSheets();
+      if (Array.isArray(fetched) && fetched.length > 0) return normalizeWorksVideoUrls(fetched);
+    } catch (e) {
+      console.warn('loadTheatreWorksData: fetchFromGoogleSheets failed (vercel)', (e as any)?.message ?? e);
+    }
+    return [];
+  }
 
   if (!force) {
     try {

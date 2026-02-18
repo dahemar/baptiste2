@@ -3,6 +3,9 @@ dist/
 # generated types
 .astro/
 
+# local runtime cache (must not be deployed)
+.cache/
+
 # dependencies
 node_modules/
 

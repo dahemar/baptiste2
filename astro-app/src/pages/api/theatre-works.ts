@@ -3,6 +3,40 @@ import { loadFromCache, saveToCache, fetchFromGoogleSheets, clearMemoryCache } f
 
 console.log('[api/theatre-works] module imported');
 
+const OLD_R2_PUBLIC_HOST = 'pub-16fb774f4ada4a69b6c70bc856201eeb.r2.dev';
+const NEW_R2_PUBLIC_HOST = 'pub-f04cf0f8494f457e889559aa0b6e57b7.r2.dev';
+
+function rewriteR2PublicUrlIfNeeded(url: string): string {
+  if (!url || typeof url !== 'string') return url;
+  try {
+    const u = new URL(url);
+    if (u.hostname === OLD_R2_PUBLIC_HOST) {
+      u.hostname = NEW_R2_PUBLIC_HOST;
+      u.protocol = 'https:';
+      return u.toString();
+    }
+  } catch {
+    // ignore
+  }
+  return url;
+}
+
+function rewritePossiblyProxiedUrl(url: string): string {
+  if (!url || typeof url !== 'string') return url;
+  if (url.startsWith('/api/proxy/')) {
+    const encoded = url.slice('/api/proxy/'.length);
+    try {
+      const decoded = decodeURIComponent(encoded);
+      const rewritten = rewriteR2PublicUrlIfNeeded(decoded);
+      if (rewritten !== decoded) return `/api/proxy/${encodeURIComponent(rewritten)}`;
+    } catch {
+      // ignore
+    }
+    return url;
+  }
+  return rewriteR2PublicUrlIfNeeded(url);
+}
+
 function shouldProxyHost(hostname: string) {
   return (
     ['github.com', 'release-assets.githubusercontent.com'].includes(hostname) ||
@@ -13,11 +47,12 @@ function shouldProxyHost(hostname: string) {
 
 function buildProxiedUrl(videoUrl: string) {
   if (!videoUrl || typeof videoUrl !== 'string') return undefined;
-  if (videoUrl.startsWith('/api/proxy/')) return videoUrl;
+  const rewritten = rewritePossiblyProxiedUrl(videoUrl);
+  if (rewritten.startsWith('/api/proxy/')) return rewritten;
   try {
-    const u = new URL(videoUrl);
+    const u = new URL(rewritten);
     if (!shouldProxyHost(u.hostname)) return undefined;
-    return `/api/proxy/${encodeURIComponent(videoUrl)}`;
+    return `/api/proxy/${encodeURIComponent(rewritten)}`;
   } catch {
     return undefined;
   }
@@ -27,8 +62,10 @@ function normalizeWorksForProxy<T extends any[]>(works: T): T {
   return (works || []).map((work: any) => {
     const scenes = Array.isArray(work?.scenes) ? work.scenes : [];
     const normalizedScenes = scenes.map((scene: any) => {
-      const rawVideoUrl = typeof scene?.videoUrl === 'string' ? scene.videoUrl : '';
-      const existingProxied = typeof scene?.proxiedVideoUrl === 'string' ? scene.proxiedVideoUrl : undefined;
+      const rawVideoUrl = typeof scene?.videoUrl === 'string' ? rewritePossiblyProxiedUrl(scene.videoUrl) : '';
+      const existingProxied = typeof scene?.proxiedVideoUrl === 'string'
+        ? rewritePossiblyProxiedUrl(scene.proxiedVideoUrl)
+        : undefined;
 
       const computedProxied = existingProxied || buildProxiedUrl(rawVideoUrl);
       const canonicalVideoUrl = computedProxied || rawVideoUrl;
@@ -57,6 +94,19 @@ export const GET: APIRoute = async (context) => {
     if (force === '1') {
       console.log('[api/theatre-works] force refresh requested, clearing memory cache');
       try { clearMemoryCache(); } catch (e) { /* ignore */ }
+    }
+
+    const isVercel = !!process.env.VERCEL;
+    if (isVercel) {
+      console.log('[api/theatre-works] vercel runtime: fetching from Google Sheets (no disk cache)');
+      const fetchPromise = fetchFromGoogleSheets();
+      const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('fetch timeout')), 8000));
+      const fresh = await Promise.race([fetchPromise, timeout]);
+      if (fresh && Array.isArray(fresh)) {
+        const normalized = normalizeWorksForProxy(fresh as any[]);
+        return new Response(JSON.stringify(normalized), { headers: { 'Content-Type': 'application/json' } });
+      }
+      return new Response(JSON.stringify([]), { headers: { 'Content-Type': 'application/json' } });
     }
 
     const cached = force === '1' ? null : await loadFromCache();

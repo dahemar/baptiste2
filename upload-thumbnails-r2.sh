@@ -57,8 +57,8 @@ echo ""
 
 if [ $SUCCESS -gt 0 ]; then
   echo "🌐 URLs públicas:"
-  echo "https://pub-16fb774f4ada4a69b6c70bc856201eeb.r2.dev/[filename].jpg"
+  echo "https://pub-f04cf0f8494f457e889559aa0b6e57b7.r2.dev/[filename].jpg"
   echo ""
   echo "Ejemplo:"
-  echo "https://pub-16fb774f4ada4a69b6c70bc856201eeb.r2.dev/1.La.Nuit.jpg"
+  echo "https://pub-f04cf0f8494f457e889559aa0b6e57b7.r2.dev/1.La.Nuit.jpg"
 fi
