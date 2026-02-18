@@ -33,8 +33,10 @@ function rewritePossiblyProxiedVideoUrl(url: string): string {
     const encoded = url.slice('/api/proxy/'.length);
     try {
       const decoded = decodeURIComponent(encoded);
+      // Prefer returning the canonical upstream URL (not the Vercel proxy path).
+      // This prevents large binaries (video) from being streamed through Vercel in production.
       const rewritten = rewriteR2PublicUrl(decoded);
-      if (rewritten !== decoded) return `/api/proxy/${encodeURIComponent(rewritten)}`;
+      if (rewritten.startsWith('http://') || rewritten.startsWith('https://')) return rewritten;
     } catch {
       // leave as-is
     }
@@ -633,12 +635,15 @@ function parseTheatreWorks(rawValues: string[][]): any[] {
     // This does not depend on thumbnail_url in Sheets.
     const thumb = deriveThumbnailFromVideoUrl(videoUrl);
 
-    // Provide an optional proxied video URL for hosts that block CORS so dev can proxy through the server
-    const proxiedVideoUrl = toProxiedVideoUrl(videoUrl);
-
-    // Prefer proxied path URL as the canonical `videoUrl` so client-side uses the safe form
-    const canonicalVideoUrl = proxiedVideoUrl ?? videoUrl;
-    work.scenes.push({ id: `${s.workId}-scene-${work.scenes.length}`, videoUrl: canonicalVideoUrl, proxiedVideoUrl, thumbnail: thumb });
+    // Optional dev-only proxy URL for hosts that block CORS.
+    // In Vercel (prod) we always return canonical upstream URLs to avoid streaming large files through Vercel.
+    const proxiedVideoUrl = IS_VERCEL_RUNTIME ? undefined : toProxiedVideoUrl(videoUrl);
+    work.scenes.push({
+      id: `${s.workId}-scene-${work.scenes.length}`,
+      videoUrl,
+      proxiedVideoUrl,
+      thumbnail: thumb,
+    });
   }
 
   for (const [workId, cs] of credits.entries()) {
@@ -662,12 +667,12 @@ function normalizeVideoUrl(url: string): string {
 function shouldProxyHost(hostname: string): boolean {
   return (
     ['github.com', 'release-assets.githubusercontent.com'].includes(hostname) ||
-    hostname.endsWith('.s3.amazonaws.com') ||
-    hostname.endsWith('.r2.dev')
+    hostname.endsWith('.s3.amazonaws.com')
   );
 }
 
 function toProxiedVideoUrl(videoUrl: string): string | undefined {
+  if (IS_VERCEL_RUNTIME) return undefined;
   if (!videoUrl || typeof videoUrl !== 'string') return undefined;
   if (videoUrl.startsWith('/api/proxy/')) return videoUrl;
   try {
@@ -686,10 +691,10 @@ function normalizeWorksVideoUrls<T extends any[]>(works: T): T {
       const rawVideoUrl = typeof scene?.videoUrl === 'string' ? rewritePossiblyProxiedVideoUrl(scene.videoUrl) : '';
       const existingProxiedRaw = typeof scene?.proxiedVideoUrl === 'string' ? scene.proxiedVideoUrl : undefined;
       const existingProxied = existingProxiedRaw ? rewritePossiblyProxiedVideoUrl(existingProxiedRaw) : undefined;
-      const proxiedVideoUrl = existingProxied || toProxiedVideoUrl(rawVideoUrl);
+      const proxiedVideoUrl = IS_VERCEL_RUNTIME ? undefined : (existingProxied || toProxiedVideoUrl(rawVideoUrl));
       return {
         ...scene,
-        videoUrl: proxiedVideoUrl || rawVideoUrl,
+        videoUrl: rawVideoUrl,
         proxiedVideoUrl,
       };
     });

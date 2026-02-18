@@ -156,46 +156,9 @@ export const GET: APIRoute = async ({ params, request }) => {
     const u = new URL(target);
     if (!isAllowedHost(u.hostname)) return new Response('Host not allowed', { status: 403 });
 
-    const range = request.headers.get('range') || undefined;
-    const upstreamHeaders: Record<string, string> = {};
-    if (range) upstreamHeaders['range'] = range;
-
-    // Skip HEAD preflight — go straight to GET to reduce latency
-    // The HEAD was adding 500ms-1s per request unnecessarily
-    await acquireSlot();
-    let res;
-    try {
-      res = await fetchWithRetries(target, { method: 'GET', redirect: 'follow', headers: upstreamHeaders }, 2, 30000);
-    } finally {
-      releaseSlot();
-    }
-
-    // Cache HEAD info from the GET response for future HEAD-only requests
-    if (res.ok || res.status === 206) {
-      const h: Record<string,string> = {};
-      ['content-type','content-length','accept-ranges','last-modified','etag','content-disposition'].forEach(hk => {
-        const v = res.headers.get(hk);
-        if (v) h[hk] = v;
-      });
-      cacheHead(target, res.status >= 200 && res.status < 300 ? 200 : res.status, h);
-    }
-
-    const headers = new Headers();
-    ['content-type','content-length','content-range','accept-ranges','last-modified','etag','content-disposition'].forEach(h => {
-      const v = res.headers.get(h);
-      if (v) headers.set(h, v);
-    });
-
-    headers.set('Access-Control-Allow-Origin', '*');
-    headers.set('Accept-Ranges', res.headers.get('accept-ranges') || 'bytes');
-    // R2 release assets are content-addressed and never mutated — cache forever.
-    // 'immutable' tells Safari/Chrome not to revalidate on back-navigation,
-    // eliminating conditional-GET round-trips that add latency on every revisit.
-    headers.set('Cache-Control', 'public, max-age=31536000, immutable');
-    // Ensure browser caches different Range responses separately
-    headers.set('Vary', 'Range');
-
-    return new Response(res.body, { status: res.status, headers });
+    // IMPORTANT: do not stream bytes through Vercel. Redirect the client to the upstream URL.
+    // Browsers will re-issue Range requests directly to the upstream origin/CDN.
+    return Response.redirect(target, 307);
   } catch (e: any) {
     console.error('[api/proxy] GET handler error', e?.stack ?? e);
     // Distinguish abort vs other network errors
@@ -232,27 +195,7 @@ export const HEAD: APIRoute = async ({ params }) => {
     const u = new URL(target);
     if (!isAllowedHost(u.hostname)) return new Response('Host not allowed', { status: 403 });
 
-    // Use cached HEAD when available
-    const cached = getCachedHead(target);
-    if (cached) {
-      const headers = new Headers();
-      Object.entries(cached.headers).forEach(([k,v]) => headers.set(k, v));
-      headers.set('Access-Control-Allow-Origin', '*');
-      headers.set('Accept-Ranges', cached.headers['accept-ranges'] || 'bytes');
-      return new Response(null, { status: cached.status, headers });
-    }
-
-    const res = await fetchWithRetries(target, { method: 'HEAD', redirect: 'follow' }, 1, 5000);
-    const headers = new Headers();
-    const out: Record<string,string> = {};
-    ['content-type','content-length','accept-ranges','last-modified','etag','content-disposition'].forEach(h => {
-      const v = res.headers.get(h);
-      if (v) { headers.set(h, v); out[h] = v; }
-    });
-    headers.set('Access-Control-Allow-Origin', '*');
-    headers.set('Accept-Ranges', res.headers.get('accept-ranges') || 'bytes');
-    cacheHead(target, res.status, out);
-    return new Response(null, { status: res.status, headers });
+    return Response.redirect(target, 307);
   } catch (e: any) {
     console.error('[api/proxy] HEAD handler error', e?.stack ?? e);
     return new Response(String(e?.message ?? e), { status: 500 });

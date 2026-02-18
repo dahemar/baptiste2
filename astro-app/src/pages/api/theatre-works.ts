@@ -29,8 +29,10 @@ function rewritePossiblyProxiedUrl(url: string): string {
     const encoded = url.slice('/api/proxy/'.length);
     try {
       const decoded = decodeURIComponent(encoded);
+      // Always prefer returning the canonical upstream URL rather than the proxy path.
+      // This prevents Vercel from streaming large binaries (videos) and reduces origin transfer.
       const rewritten = rewriteR2PublicUrlIfNeeded(decoded);
-      if (rewritten !== decoded) return `/api/proxy/${encodeURIComponent(rewritten)}`;
+      if (rewritten.startsWith('http://') || rewritten.startsWith('https://')) return rewritten;
     } catch {
       // ignore
     }
@@ -42,8 +44,7 @@ function rewritePossiblyProxiedUrl(url: string): string {
 function shouldProxyHost(hostname: string) {
   return (
     ['github.com', 'release-assets.githubusercontent.com'].includes(hostname) ||
-    hostname.endsWith('.s3.amazonaws.com') ||
-    hostname.endsWith('.r2.dev')
+    hostname.endsWith('.s3.amazonaws.com')
   );
 }
 
@@ -61,6 +62,7 @@ function buildProxiedUrl(videoUrl: string) {
 }
 
 function normalizeWorksForProxy<T extends any[]>(works: T): T {
+  const allowProxyUrls = !process.env.VERCEL;
   return (works || []).map((work: any) => {
     const scenes = Array.isArray(work?.scenes) ? work.scenes : [];
     const normalizedScenes = scenes.map((scene: any) => {
@@ -69,8 +71,8 @@ function normalizeWorksForProxy<T extends any[]>(works: T): T {
         ? rewritePossiblyProxiedUrl(scene.proxiedVideoUrl)
         : undefined;
 
-      const computedProxied = existingProxied || buildProxiedUrl(rawVideoUrl);
-      const canonicalVideoUrl = computedProxied || rawVideoUrl;
+      const computedProxied = allowProxyUrls ? (existingProxied || buildProxiedUrl(rawVideoUrl)) : undefined;
+      const canonicalVideoUrl = rawVideoUrl;
 
       return {
         ...scene,

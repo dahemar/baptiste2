@@ -44,33 +44,10 @@ export const GET: APIRoute = async (context) => {
     }) || hostname.endsWith('.r2.dev');
     if (!allowed) return new Response('Host not allowed', { status: 403 });
 
-    // Forward Range header if present so browsers can seek / partial requests
-    const range = context.request.headers.get('range') || undefined;
-    const upstreamHeaders: Record<string, string> = {};
-    if (range) upstreamHeaders['range'] = range;
-
-    const res = await fetch(target, { method: 'GET', redirect: 'follow', headers: upstreamHeaders });
-
-    // Clone headers we want to forward
-    const headers = new Headers();
-    [
-      'content-type',
-      'content-length',
-      'content-range',
-      'accept-ranges',
-      'last-modified',
-      'etag'
-    ].forEach(h => {
-      const v = res.headers.get(h);
-      if (v) headers.set(h, v);
-    });
-
-    // Allow CORS for dev/proxy usage
-    headers.set('Access-Control-Allow-Origin', '*');
-    // Allow range requests from browsers
-    headers.set('Accept-Ranges', res.headers.get('accept-ranges') || 'bytes');
-
-    return new Response(res.body, { status: res.status, headers });
+    // IMPORTANT: do not stream the upstream response through Vercel.
+    // Redirecting ensures the client downloads bytes from the upstream CDN/storage directly,
+    // dramatically reducing Vercel (Fast Origin Transfer) bandwidth.
+    return Response.redirect(target, 307);
   } catch (e: any) {
     return new Response(String(e?.message ?? e), { status: 500 });
   }
@@ -111,16 +88,8 @@ export const HEAD: APIRoute = async (context) => {
     }) || hostname.endsWith('.r2.dev');
     if (!allowed) return new Response('Host not allowed', { status: 403 });
 
-    const res = await fetch(target, { method: 'HEAD', redirect: 'follow' });
-    const headers = new Headers();
-    ['content-type', 'content-length', 'accept-ranges', 'last-modified', 'etag'].forEach(h => {
-      const v = res.headers.get(h);
-      if (v) headers.set(h, v);
-    });
-    headers.set('Access-Control-Allow-Origin', '*');
-    headers.set('Accept-Ranges', res.headers.get('accept-ranges') || 'bytes');
-
-    return new Response(null, { status: res.status, headers });
+    // Same rationale as GET: avoid proxying upstream headers/data through Vercel.
+    return Response.redirect(target, 307);
   } catch (e: any) {
     return new Response(String(e?.message ?? e), { status: 500 });
   }

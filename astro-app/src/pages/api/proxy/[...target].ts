@@ -1,3 +1,5 @@
+import type { APIRoute } from 'astro';
+
 // DEPRECATED fallback catch-all. No GET export to avoid conflicting route exports.
 export function getStaticPaths() { return []; }
 export const prerender = false;
@@ -53,23 +55,8 @@ export const GET: APIRoute = async ({ params, request }) => {
     const u = new URL(target);
     if (!isAllowedHost(u.hostname)) return new Response('Host not allowed', { status: 403 });
 
-    const range = request.headers.get('range') || undefined;
-    const upstreamHeaders: Record<string, string> = {};
-    if (range) upstreamHeaders['range'] = range;
-
-    const res = await fetch(target, { method: 'GET', redirect: 'follow', headers: upstreamHeaders });
-
-    const headers = new Headers();
-    ['content-type','content-length','content-range','accept-ranges','last-modified','etag','content-disposition'].forEach(h => {
-      const v = res.headers.get(h);
-      if (v) headers.set(h, v);
-    });
-
-    // Allow CORS for dev/proxy usage
-    headers.set('Access-Control-Allow-Origin', '*');
-    headers.set('Accept-Ranges', res.headers.get('accept-ranges') || 'bytes');
-
-    return new Response(res.body, { status: res.status, headers });
+    // Redirect instead of streaming bytes through Vercel.
+    return Response.redirect(target, 307);
   } catch (e: any) {
     return new Response(String(e?.message ?? e), { status: 500 });
   }
@@ -90,16 +77,7 @@ export const HEAD: APIRoute = async ({ params }) => {
     const u = new URL(target);
     if (!isAllowedHost(u.hostname)) return new Response('Host not allowed', { status: 403 });
 
-    const res = await fetch(target, { method: 'HEAD', redirect: 'follow' });
-    const headers = new Headers();
-    ['content-type','content-length','accept-ranges','last-modified','etag','content-disposition'].forEach(h => {
-      const v = res.headers.get(h);
-      if (v) headers.set(h, v);
-    });
-    headers.set('Access-Control-Allow-Origin', '*');
-    headers.set('Accept-Ranges', res.headers.get('accept-ranges') || 'bytes');
-
-    return new Response(null, { status: res.status, headers });
+    return Response.redirect(target, 307);
   } catch (e: any) {
     return new Response(String(e?.message ?? e), { status: 500 });
   }
