@@ -680,10 +680,30 @@ export default function VideoGrid({ works }: VideoGridProps) {
       if (!activeVideo || activeVideo.paused || activeVideo.readyState < 2) return;
     }
 
+    // On mobile, avoid competing with the *current* video's startup buffering.
+    // Prefetching adjacent scenes too early can create a tiny stall right after playback begins.
+    if (isMobile) {
+      const active = mobileFixedVideoRef.current;
+      if (!active || active.paused) return;
+      // Wait until the browser has buffered at least ~2s ahead.
+      const buffered = active.buffered;
+      const current = active.currentTime || 0;
+      let bufferedAhead = 0;
+      try {
+        if (buffered && buffered.length > 0) {
+          bufferedAhead = Math.max(0, buffered.end(buffered.length - 1) - current);
+        }
+      } catch {
+        bufferedAhead = 0;
+      }
+      if (active.readyState < 3 || bufferedAhead < 2) return;
+    }
+
     const controller = new AbortController();
-    // 256 KB on mobile (down from 512 KB), 384 KB on desktop
+    // 256 KB on mobile, 384 KB on desktop
     const prefetchBytes = isMobile ? 262143 : 393215;
-    const delay = isMobile ? 250 : 1800;
+    // Mobile: delay more to ensure smooth start; Desktop: keep conservative delay
+    const delay = isMobile ? 2000 : 1800;
 
     const toFetch = new Set<string>();
 
@@ -809,11 +829,8 @@ export default function VideoGrid({ works }: VideoGridProps) {
         try {
           video.muted = true;
           await video.play();
-          if (!cancelled) {
-            video.muted = false;
-            video.volume = 1.0;
-            await video.play();
-          }
+          // Don't call play() again: re-calling play() can cause a small hiccup on some devices.
+          // We'll attempt to unmute once playback is confirmed (see handlePlaying).
         } catch (e2) {
           console.error('[mobile] play failed:', e2);
         }
@@ -822,10 +839,27 @@ export default function VideoGrid({ works }: VideoGridProps) {
 
     // Use 'canplaythrough' — Safari iOS can stall right after 'loadeddata';
     // 'canplaythrough' signals the browser has enough data to play without buffering.
-    const handleReady = () => play();
+    const handleReady = () => {
+      // Cancel the safety timer so we don't call play() twice.
+      if (mobileAutoplayTimerRef.current) {
+        clearTimeout(mobileAutoplayTimerRef.current);
+        mobileAutoplayTimerRef.current = null;
+      }
+      play();
+    };
     const handlePlaying = () => {
       if (!cancelled && !mobileUserPausedRef.current) {
         setMobilePosterOverlay((prev) => ({ ...prev, visible: false }));
+
+        // If we started muted due to autoplay policy, try unmuting without restarting playback.
+        try {
+          if (video.muted) {
+            video.muted = false;
+            video.volume = 1.0;
+          }
+        } catch {
+          // ignore
+        }
       }
     };
     mobileCanPlaythroughHandlerRef.current = handleReady;
