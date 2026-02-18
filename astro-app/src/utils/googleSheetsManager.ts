@@ -130,6 +130,55 @@ async function fetchGvizSheetAsRows(sheetId: string, sheetName: string, timeoutM
   }
 }
 
+async function fetchTheatreDataViaGviz(sheetId: string): Promise<any[] | null> {
+  if (!sheetId) return null;
+  const trySheets = [
+    // Actual tab names in the published sheet
+    'theatre_works',
+    'theatre-works-scenes',
+    'theatre-works-credits',
+    // Backwards-compatible guesses
+    'THEATRE_WORKS',
+    'THEATRE_SCENES',
+    'THEATRE_CREDITS',
+    'WORKS',
+    'SCENES',
+    'CREDITS',
+  ];
+
+  const combined: any[] = [];
+  const pushSection = (rangeName: string, vals: any[]) => {
+    if (!Array.isArray(vals) || vals.length === 0) return;
+    const upper = String(rangeName).toUpperCase();
+    const sectionName = upper.includes('WORK')
+      ? 'WORKS'
+      : upper.includes('SCENE')
+        ? 'SCENES'
+        : upper.includes('CREDIT')
+          ? 'CREDITS'
+          : upper;
+    const hdr = Array.isArray(vals[0]) ? vals[0] : [vals[0]];
+    combined.push([sectionName, ...(hdr || [])]);
+    for (let r = 1; r < vals.length; r++) {
+      const row = Array.isArray(vals[r]) ? vals[r] : [vals[r]];
+      combined.push([sectionName, ...row]);
+    }
+  };
+
+  for (const tab of trySheets) {
+    const vals = await fetchGvizSheetAsRows(sheetId, tab, 10000);
+    if (!vals || vals.length === 0) continue;
+    pushSection(tab, vals);
+  }
+
+  if (combined.length === 0) return null;
+  try {
+    return parseTheatreWorks(combined as string[][]);
+  } catch {
+    return null;
+  }
+}
+
 async function readCsvRows(filePath: string): Promise<string[][]> {
   const csvContent = await fs.readFile(filePath, 'utf-8');
   return csvContent
@@ -320,61 +369,20 @@ export async function fetchFromGoogleSheets(): Promise<any[]> {
         clearTimeout(t);
       }
       }
+
+      // If Sheets API attempts didn't yield any rows on Vercel, fall back dynamically to gviz export.
+      if (IS_VERCEL_RUNTIME && (!Array.isArray(rows) || rows.length === 0)) {
+        const viaGviz = await fetchTheatreDataViaGviz(SHEET_ID);
+        if (Array.isArray(viaGviz) && viaGviz.length > 0) {
+          return viaGviz;
+        }
+      }
     } else {
       // No API key available. On Vercel runtime we still want to load dynamically from Sheets.
       // Use the public gviz CSV export (requires the sheet/tabs to be accessible).
       if (SHEET_ID) {
-        const trySheets = [
-          // Preferred human-friendly tabs
-          'THEATRE_WORKS',
-          'THEATRE_SCENES',
-          'THEATRE_CREDITS',
-          // Actual tab names in the published sheet
-          'theatre_works',
-          'theatre-works-scenes',
-          'theatre-works-credits',
-          // Legacy-ish names
-          'theatre_works_works',
-          'theatre_works_scenes',
-          'theatre_works_credits',
-          // Original section tabs
-          'WORKS',
-          'SCENES',
-          'CREDITS',
-        ];
-
-        const combined: any[] = [];
-        const pushSection = (rangeName: string, vals: any[]) => {
-          if (!Array.isArray(vals) || vals.length === 0) return;
-          const upper = String(rangeName).toUpperCase();
-          const sectionName = upper.includes('WORK')
-            ? 'WORKS'
-            : upper.includes('SCENE')
-              ? 'SCENES'
-              : upper.includes('CREDIT')
-                ? 'CREDITS'
-                : upper;
-          const hdr = Array.isArray(vals[0]) ? vals[0] : [vals[0]];
-          combined.push([sectionName, ...(hdr || [])]);
-          for (let r = 1; r < vals.length; r++) {
-            const row = Array.isArray(vals[r]) ? vals[r] : [vals[r]];
-            combined.push([sectionName, ...row]);
-          }
-        };
-
-        // Fetch each tab and merge; stop early once we have WORKS+SCENES.
-        let gotWorks = false;
-        let gotScenes = false;
-        for (const tab of trySheets) {
-          const vals = await fetchGvizSheetAsRows(SHEET_ID, tab, 10000);
-          if (!vals || vals.length === 0) continue;
-          pushSection(tab, vals);
-          if (String(tab).toUpperCase().includes('WORK')) gotWorks = true;
-          if (String(tab).toUpperCase().includes('SCENE')) gotScenes = true;
-          if (gotWorks && gotScenes) break;
-        }
-
-        if (combined.length > 0) rows = combined;
+        const viaGviz = await fetchTheatreDataViaGviz(SHEET_ID);
+        if (Array.isArray(viaGviz) && viaGviz.length > 0) return viaGviz;
       }
     }
   }
