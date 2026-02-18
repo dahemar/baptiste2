@@ -132,19 +132,11 @@ async function fetchGvizSheetAsRows(sheetId: string, sheetName: string, timeoutM
 
 async function fetchTheatreDataViaGviz(sheetId: string): Promise<any[] | null> {
   if (!sheetId) return null;
-  const trySheets = [
-    // Actual tab names in the published sheet
-    'theatre_works',
-    'theatre-works-scenes',
-    'theatre-works-credits',
-    // Backwards-compatible guesses
-    'THEATRE_WORKS',
-    'THEATRE_SCENES',
-    'THEATRE_CREDITS',
-    'WORKS',
-    'SCENES',
-    'CREDITS',
-  ];
+  // IMPORTANT:
+  // When `sheet=` points to a non-existent tab, gviz often returns the *first* tab.
+  // That creates silent mis-parses (e.g. treating WORKS columns as SCENES), leading to empty videoUrl.
+  // So: only fetch tab names we know exist for this spreadsheet.
+  const trySheets = ['theatre_works', 'theatre-works-scenes', 'theatre-works-credits'];
 
   const combined: any[] = [];
   const pushSection = (rangeName: string, vals: any[]) => {
