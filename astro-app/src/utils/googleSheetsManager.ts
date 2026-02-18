@@ -114,6 +114,14 @@ function parseCsvTextRows(csvContent: string): string[][] {
     .map(line => parseCsvLine(line));
 }
 
+function inferTheatreSectionName(rangeOrTabName: string): string {
+  const upper = String(rangeOrTabName || '').toUpperCase();
+  if (upper.includes('SCENE')) return 'SCENES';
+  if (upper.includes('CREDIT')) return 'CREDITS';
+  if (upper.includes('WORK')) return 'WORKS';
+  return upper;
+}
+
 async function fetchGvizSheetAsRows(sheetId: string, sheetName: string, timeoutMs = 10000): Promise<string[][]> {
   const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
   const controller = new AbortController();
@@ -141,14 +149,7 @@ async function fetchTheatreDataViaGviz(sheetId: string): Promise<any[] | null> {
   const combined: any[] = [];
   const pushSection = (rangeName: string, vals: any[]) => {
     if (!Array.isArray(vals) || vals.length === 0) return;
-    const upper = String(rangeName).toUpperCase();
-    const sectionName = upper.includes('WORK')
-      ? 'WORKS'
-      : upper.includes('SCENE')
-        ? 'SCENES'
-        : upper.includes('CREDIT')
-          ? 'CREDITS'
-          : upper;
+    const sectionName = inferTheatreSectionName(rangeName);
     const hdr = Array.isArray(vals[0]) ? vals[0] : [vals[0]];
     combined.push([sectionName, ...(hdr || [])]);
     for (let r = 1; r < vals.length; r++) {
@@ -271,14 +272,7 @@ export async function fetchFromGoogleSheets(): Promise<any[]> {
             const vals = Array.isArray(vr?.values) ? vr.values : [];
             if (vals.length === 0) continue;
 
-            const upper = String(rangeName).toUpperCase();
-            const sectionName = upper.includes('WORK')
-              ? 'WORKS'
-              : upper.includes('SCENE')
-                ? 'SCENES'
-                : upper.includes('CREDIT')
-                  ? 'CREDITS'
-                  : upper;
+            const sectionName = inferTheatreSectionName(rangeName);
 
             const hdr = Array.isArray(vals[0]) ? vals[0] : [vals[0]];
             combined.push([sectionName, ...(hdr || [])]);
