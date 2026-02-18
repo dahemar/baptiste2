@@ -1,6 +1,8 @@
 import type { APIRoute } from 'astro';
 import { loadFromCache, saveToCache, fetchFromGoogleSheets, clearMemoryCache } from '../../utils/googleSheetsManager';
 
+export const prerender = false;
+
 console.log('[api/theatre-works] module imported');
 
 const OLD_R2_PUBLIC_HOST = 'pub-16fb774f4ada4a69b6c70bc856201eeb.r2.dev';
