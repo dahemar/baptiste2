@@ -70,6 +70,7 @@ export default function VideoGrid({ works }: VideoGridProps) {
   const activeVideoRef = useRef<HTMLVideoElement | null>(null);
   const mobileFixedVideoRef = useRef<HTMLVideoElement | null>(null);
   const [showSceneArrows, setShowSceneArrows] = useState(false);
+  const [mobilePosterOverlay, setMobilePosterOverlay] = useState<{ visible: boolean; url?: string }>({ visible: false });
   const [generatedThumbnails, setGeneratedThumbnails] = useState<Record<string, string>>({});
   const generatedThumbsRef = useRef<Record<string, string>>({});
   const failedThumbsRef = useRef<Set<string>>(new Set());
@@ -83,6 +84,8 @@ export default function VideoGrid({ works }: VideoGridProps) {
   const mobileAutoplayVideoRef = useRef<HTMLVideoElement | null>(null);
   const mobileAutoplayTimerRef = useRef<number | null>(null);
   const mobileUserPausedRef = useRef(false);
+  const mobileLoadedSceneKeyRef = useRef<string | null>(null);
+  const [desktopPosterOverlay, setDesktopPosterOverlay] = useState<{ key: string | null; url?: string }>({ key: null });
 
   const cancelPendingMobileAutoplay = useCallback(() => {
     const pendingVideo = mobileAutoplayVideoRef.current;
@@ -405,8 +408,9 @@ export default function VideoGrid({ works }: VideoGridProps) {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Hard-stop all videos except the specified one: pause + reset to beginning
-  const stopAllVideosExcept = useCallback((workIdx: number | null, sceneIdx: number | null) => {
+  // Hard-stop all videos except the specified one.
+  // resetToStart=true is used for scene switches; false keeps the paused frame.
+  const stopAllVideosExcept = useCallback((workIdx: number | null, sceneIdx: number | null, resetToStart: boolean = true) => {
     // Stop desktop grid videos
     const allVideos = document.querySelectorAll('.scene-item video');
     allVideos.forEach((video) => {
@@ -419,9 +423,10 @@ export default function VideoGrid({ works }: VideoGridProps) {
         const wasPlaying = !videoEl.paused;
         if (wasPlaying) {
           videoEl.pause();
-          // Reset only videos that were actively playing.
-          // Keeping buffered paused videos avoids startup rebuffer stalls.
-          videoEl.currentTime = 0;
+          if (resetToStart) {
+            // Reset only on explicit scene switch.
+            videoEl.currentTime = 0;
+          }
         }
       }
     });
@@ -437,7 +442,9 @@ export default function VideoGrid({ works }: VideoGridProps) {
         const wasPlaying = !mobileVideo.paused;
         if (wasPlaying) {
           mobileVideo.pause();
-          mobileVideo.currentTime = 0;
+          if (resetToStart) {
+            mobileVideo.currentTime = 0;
+          }
         }
       }
     }
@@ -451,6 +458,7 @@ export default function VideoGrid({ works }: VideoGridProps) {
     if (!video) return;
     try {
       cancelPendingMobileAutoplay();
+      mobileLoadedSceneKeyRef.current = null;
       video.pause();
       video.muted = true;
       video.removeAttribute('src');
@@ -504,13 +512,22 @@ export default function VideoGrid({ works }: VideoGridProps) {
         videoElement.muted = false;
         videoElement.volume = 1.0;
         await videoElement.play();
+        if (playGenRef.current !== gen) {
+          try { videoElement.pause(); } catch {}
+          return;
+        }
         activeVideoRef.current = videoElement;
       } catch (error) {
         console.error('Error playing video:', error);
         // If unmuted play fails due to autoplay policy, try muted first
         try {
+          if (playGenRef.current !== gen) return;
           videoElement.muted = true;
           await videoElement.play();
+          if (playGenRef.current !== gen) {
+            try { videoElement.pause(); } catch {}
+            return;
+          }
           activeVideoRef.current = videoElement;
           if (fromUserGesture) {
             // Unmute and restart playback to enable audio
@@ -518,6 +535,10 @@ export default function VideoGrid({ works }: VideoGridProps) {
             videoElement.volume = 1.0;
             // Call play again to apply the unmuted state
             await videoElement.play();
+            if (playGenRef.current !== gen) {
+              try { videoElement.pause(); } catch {}
+              return;
+            }
           }
         } catch (e2) {
           console.error('Error playing video (muted fallback):', e2);
@@ -574,11 +595,17 @@ export default function VideoGrid({ works }: VideoGridProps) {
     if (sameWork && sameScene && isPlaying) {
       // Clicking the currently playing video: pause it
       setIsPlaying(false);
-      stopAllVideosExcept(null, null);
+      stopAllVideosExcept(null, null, false);
       return;
     }
 
     // Any other click: start playing from beginning
+    if (!isMobile) {
+      const scene = works[workIdx]?.scenes?.[sceneIdx];
+      const poster = resolveScenePoster(workIdx, sceneIdx, scene);
+      setDesktopPosterOverlay({ key: `${workIdx}:${sceneIdx}`, url: poster });
+    }
+
     setCurrentWorkIndex(workIdx);
     setCurrentSceneIndex(sceneIdx);
     setIsPlaying(true);
@@ -591,13 +618,14 @@ export default function VideoGrid({ works }: VideoGridProps) {
       const sceneElement = document.querySelector(`[data-work-index="${workIdx}"][data-scene-index="${sceneIdx}"]`);
       sceneElement?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
     }, 50);
-  }, [currentWorkIndex, currentSceneIndex, isPlaying, stopAllVideosExcept, playVideo]);
+  }, [currentWorkIndex, currentSceneIndex, isPlaying, stopAllVideosExcept, playVideo, isMobile, works, resolveScenePoster]);
 
   // Handle play/pause state — only stop videos, never start a second play here
   // (playVideo is called directly from handleSceneClick within user gesture context)
   useEffect(() => {
     if (!isPlaying) {
-      stopAllVideosExcept(null, null);
+      if (!isMobile) setDesktopPosterOverlay({ key: null });
+      stopAllVideosExcept(null, null, false);
       // Nuclear safety net: force-pause every <video> on the page
       // to guarantee no orphan audio survives unmount / state changes.
       const allVideos = document.querySelectorAll('video') as NodeListOf<HTMLVideoElement>;
@@ -610,7 +638,7 @@ export default function VideoGrid({ works }: VideoGridProps) {
         } catch {}
       });
     }
-  }, [isPlaying, stopAllVideosExcept]);
+  }, [isPlaying, stopAllVideosExcept, isMobile]);
 
   // Pause mobile video when the tab/app goes to background (e.g. swipe home on iOS)
   useEffect(() => {
@@ -643,6 +671,13 @@ export default function VideoGrid({ works }: VideoGridProps) {
         if (conn.saveData) return;
         if (conn.effectiveType === 'slow-2g' || conn.effectiveType === '2g') return;
       }
+    } else {
+      // Desktop: only prefetch when active scene is already rendering frames,
+      // so distant-row clicks don't compete with startup bandwidth.
+      const activeVideo = document.querySelector(
+        `[data-work-index="${currentWorkIndex}"][data-scene-index="${currentSceneIndex}"] video`
+      ) as HTMLVideoElement | null;
+      if (!activeVideo || activeVideo.paused || activeVideo.readyState < 2) return;
     }
 
     const controller = new AbortController();
@@ -727,6 +762,8 @@ export default function VideoGrid({ works }: VideoGridProps) {
 
     if (!isPlaying) {
       cancelPendingMobileAutoplay();
+      mobileLoadedSceneKeyRef.current = null;
+      setMobilePosterOverlay({ visible: false });
       // Force silence when leaving the player
       video.pause();
       video.muted = true;
@@ -740,9 +777,16 @@ export default function VideoGrid({ works }: VideoGridProps) {
 
     const newSrc = scene.proxiedVideoUrl ?? scene.videoUrl;
     const poster = resolveScenePoster(currentWorkIndex, currentSceneIndex, scene);
+    const sceneKey = `${currentWorkIndex}:${currentSceneIndex}:${newSrc}`;
+
+    if (mobileLoadedSceneKeyRef.current === sceneKey) {
+      return;
+    }
 
     cancelPendingMobileAutoplay();
     mobileUserPausedRef.current = false;
+    mobileLoadedSceneKeyRef.current = sceneKey;
+    setMobilePosterOverlay({ visible: true, url: poster });
 
     // Pause + clear old source before loading new one
     video.pause();
@@ -779,9 +823,15 @@ export default function VideoGrid({ works }: VideoGridProps) {
     // Use 'canplaythrough' — Safari iOS can stall right after 'loadeddata';
     // 'canplaythrough' signals the browser has enough data to play without buffering.
     const handleReady = () => play();
+    const handlePlaying = () => {
+      if (!cancelled && !mobileUserPausedRef.current) {
+        setMobilePosterOverlay((prev) => ({ ...prev, visible: false }));
+      }
+    };
     mobileCanPlaythroughHandlerRef.current = handleReady;
     mobileAutoplayVideoRef.current = video;
     video.addEventListener('canplaythrough', handleReady, { once: true });
+    video.addEventListener('playing', handlePlaying);
 
     // Safety timeout: force play after 1.5s even if event hasn't fired
     const timer = window.setTimeout(() => {
@@ -792,6 +842,7 @@ export default function VideoGrid({ works }: VideoGridProps) {
 
     return () => {
       cancelled = true;
+      video.removeEventListener('playing', handlePlaying);
       cancelPendingMobileAutoplay();
     };
   }, [isMobile, isPlaying, currentWorkIndex, currentSceneIndex, works, resolveScenePoster, cancelPendingMobileAutoplay]);
@@ -1029,7 +1080,7 @@ export default function VideoGrid({ works }: VideoGridProps) {
               <div 
                 data-work-index={currentWorkIndex}
                 data-scene-index={currentSceneIndex}
-                style={{ width: '100%', height: '100%' }}
+                style={{ width: '100%', height: '100%', position: 'relative' }}
               >
                 <video
                   ref={mobileFixedVideoRef}
@@ -1053,10 +1104,27 @@ export default function VideoGrid({ works }: VideoGridProps) {
                     } else {
                       mobileUserPausedRef.current = true;
                       cancelPendingMobileAutoplay();
+                      setMobilePosterOverlay((prev) => ({ ...prev, visible: false }));
                       vid.pause();
                     }
                   }}
                 />
+                {mobilePosterOverlay.visible && mobilePosterOverlay.url && (
+                  <img
+                    src={mobilePosterOverlay.url}
+                    alt=""
+                    aria-hidden="true"
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'cover',
+                      pointerEvents: 'none',
+                      zIndex: 1,
+                    }}
+                  />
+                )}
               </div>
             </div>
 
@@ -1215,13 +1283,25 @@ export default function VideoGrid({ works }: VideoGridProps) {
                       playsInline
                       preload={
                         workIdx === currentWorkIndex && sceneIdx === currentSceneIndex ? 'auto' :
-                        workIdx === currentWorkIndex && Math.abs(sceneIdx - currentSceneIndex) <= 1 ? 'auto' :
+                        workIdx === currentWorkIndex && Math.abs(sceneIdx - currentSceneIndex) <= 1 ? 'metadata' :
                         sceneIdx === 0 ? 'metadata' :
                         Math.abs(workIdx - currentWorkIndex) <= 1 ? 'metadata' :
                         'none'
                       }
                       loop
+                      onPlaying={() => {
+                        const key = `${workIdx}:${sceneIdx}`;
+                        setDesktopPosterOverlay((prev) => (prev.key === key ? { key: null } : prev));
+                      }}
                     />
+                    {desktopPosterOverlay.key === `${workIdx}:${sceneIdx}` && desktopPosterOverlay.url && (
+                      <img
+                        className="desktop-poster-overlay"
+                        src={desktopPosterOverlay.url}
+                        alt=""
+                        aria-hidden="true"
+                      />
+                    )}
                     <button 
                       className="play-pause-button"
                       onClick={(e) => {
