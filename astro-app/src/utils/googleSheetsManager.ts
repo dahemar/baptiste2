@@ -106,6 +106,30 @@ function parseCsvLine(line: string): string[] {
   return out;
 }
 
+function parseCsvTextRows(csvContent: string): string[][] {
+  return (csvContent || '')
+    .split('\n')
+    .map(line => line.replace(/\r$/, ''))
+    .filter(line => line.trim().length > 0)
+    .map(line => parseCsvLine(line));
+}
+
+async function fetchGvizSheetAsRows(sheetId: string, sheetName: string, timeoutMs = 10000): Promise<string[][]> {
+  const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
+  const controller = new AbortController();
+  const t = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { signal: controller.signal });
+    if (!res.ok) return [];
+    const text = await res.text();
+    return parseCsvTextRows(text);
+  } catch {
+    return [];
+  } finally {
+    clearTimeout(t);
+  }
+}
+
 async function readCsvRows(filePath: string): Promise<string[][]> {
   const csvContent = await fs.readFile(filePath, 'utf-8');
   return csvContent
@@ -293,8 +317,57 @@ export async function fetchFromGoogleSheets(): Promise<any[]> {
       }
       }
     } else {
-      // No API key available
-      rows = [];
+      // No API key available. On Vercel runtime we still want to load dynamically from Sheets.
+      // Use the public gviz CSV export (requires the sheet/tabs to be accessible).
+      if (SHEET_ID) {
+        const trySheets = [
+          // Preferred human-friendly tabs
+          'THEATRE_WORKS',
+          'THEATRE_SCENES',
+          'THEATRE_CREDITS',
+          // Legacy-ish names
+          'theatre_works_works',
+          'theatre_works_scenes',
+          'theatre_works_credits',
+          // Original section tabs
+          'WORKS',
+          'SCENES',
+          'CREDITS',
+        ];
+
+        const combined: any[] = [];
+        const pushSection = (rangeName: string, vals: any[]) => {
+          if (!Array.isArray(vals) || vals.length === 0) return;
+          const upper = String(rangeName).toUpperCase();
+          const sectionName = upper.includes('WORK')
+            ? 'WORKS'
+            : upper.includes('SCENE')
+              ? 'SCENES'
+              : upper.includes('CREDIT')
+                ? 'CREDITS'
+                : upper;
+          const hdr = Array.isArray(vals[0]) ? vals[0] : [vals[0]];
+          combined.push([sectionName, ...(hdr || [])]);
+          for (let r = 1; r < vals.length; r++) {
+            const row = Array.isArray(vals[r]) ? vals[r] : [vals[r]];
+            combined.push([sectionName, ...row]);
+          }
+        };
+
+        // Fetch each tab and merge; stop early once we have WORKS+SCENES.
+        let gotWorks = false;
+        let gotScenes = false;
+        for (const tab of trySheets) {
+          const vals = await fetchGvizSheetAsRows(SHEET_ID, tab, 10000);
+          if (!vals || vals.length === 0) continue;
+          pushSection(tab, vals);
+          if (String(tab).toUpperCase().includes('WORK')) gotWorks = true;
+          if (String(tab).toUpperCase().includes('SCENE')) gotScenes = true;
+          if (gotWorks && gotScenes) break;
+        }
+
+        if (combined.length > 0) rows = combined;
+      }
     }
   }
 
