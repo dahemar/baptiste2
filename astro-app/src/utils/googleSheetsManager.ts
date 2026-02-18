@@ -296,18 +296,17 @@ export async function fetchFromGoogleSheets(): Promise<any[]> {
       };
 
       // 2a) Preferred human-friendly schema first (easy manual edits with direct R2 URLs)
-      const humanRanges = [
-        process.env.THEATRE_WORKS_RANGE || 'THEATRE_WORKS',
-        process.env.THEATRE_SCENES_RANGE || 'THEATRE_SCENES',
-        process.env.THEATRE_CREDITS_RANGE || 'THEATRE_CREDITS',
-        // Actual tab names in the published sheet
-        'theatre_works',
-        'theatre-works-scenes',
-        'theatre-works-credits',
-        'theatre_works_works',
-        'theatre_works_scenes',
-        'theatre_works_credits',
-      ];
+      const envRanges = [
+        process.env.THEATRE_WORKS_RANGE,
+        process.env.THEATRE_SCENES_RANGE,
+        process.env.THEATRE_CREDITS_RANGE,
+      ].filter(Boolean) as string[];
+
+      // Default to the actual tab names in this spreadsheet.
+      // Important: do NOT include invalid/guessed ranges in the same batchGet, or Google returns 400 for the whole request.
+      const humanRanges = envRanges.length > 0
+        ? envRanges
+        : ['theatre_works', 'theatre-works-scenes', 'theatre-works-credits'];
       const humanCombined = await batchGetCombinedRows(humanRanges);
       if (humanCombined.length > 0) {
         rows = humanCombined;
