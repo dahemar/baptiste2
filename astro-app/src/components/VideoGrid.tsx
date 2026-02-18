@@ -78,6 +78,25 @@ export default function VideoGrid({ works }: VideoGridProps) {
   const playGenRef = useRef(0);
   // Track pending canplay listener so we can cancel it
   const pendingCanPlayRef = useRef<{ el: HTMLVideoElement; handler: () => void; timeout: number } | null>(null);
+  // Mobile autoplay controls to prevent stale delayed play() from restarting after manual pause
+  const mobileCanPlaythroughHandlerRef = useRef<(() => void) | null>(null);
+  const mobileAutoplayVideoRef = useRef<HTMLVideoElement | null>(null);
+  const mobileAutoplayTimerRef = useRef<number | null>(null);
+  const mobileUserPausedRef = useRef(false);
+
+  const cancelPendingMobileAutoplay = useCallback(() => {
+    const pendingVideo = mobileAutoplayVideoRef.current;
+    const pendingHandler = mobileCanPlaythroughHandlerRef.current;
+    if (pendingVideo && pendingHandler) {
+      pendingVideo.removeEventListener('canplaythrough', pendingHandler);
+    }
+    if (mobileAutoplayTimerRef.current !== null) {
+      clearTimeout(mobileAutoplayTimerRef.current);
+      mobileAutoplayTimerRef.current = null;
+    }
+    mobileCanPlaythroughHandlerRef.current = null;
+    mobileAutoplayVideoRef.current = null;
+  }, []);
 
   // Parse credits from current work
   const currentWork = works[currentWorkIndex];
@@ -431,12 +450,13 @@ export default function VideoGrid({ works }: VideoGridProps) {
     const video = mobileFixedVideoRef.current;
     if (!video) return;
     try {
+      cancelPendingMobileAutoplay();
       video.pause();
       video.muted = true;
       video.removeAttribute('src');
       video.load(); // release buffers & show poster
     } catch {}
-  }, []);
+  }, [cancelPendingMobileAutoplay]);
 
   // Play the specified video — always restarts from beginning
   const playVideo = useCallback(async (workIdx: number, sceneIdx: number, fromUserGesture = false) => {
@@ -609,32 +629,54 @@ export default function VideoGrid({ works }: VideoGridProps) {
   }, [isMobile]);
 
   // Lightweight prefetch: fetch beginning of adjacent scenes into browser cache.
-  // On mobile only one video plays at a time so we can be more aggressive.
+  // On mobile only one video plays at a time — only prefetch ±1 scene within the
+  // current work. Skip entirely when the connection is slow or Save-Data is set.
   useEffect(() => {
     if (!isPlaying) return;
     const work = works[currentWorkIndex];
     if (!work) return;
 
+    // Respect Save-Data and slow connections — don't compete with active playback
+    if (isMobile) {
+      const conn = (navigator as any).connection;
+      if (conn) {
+        if (conn.saveData) return;
+        if (conn.effectiveType === 'slow-2g' || conn.effectiveType === '2g') return;
+      }
+    }
+
     const controller = new AbortController();
-    const prefetchBytes = isMobile ? 786431 : 393215; // 768KB mobile, 384KB desktop
-    const delay = isMobile ? 600 : 1800; // Mobile: less competing traffic
+    // 256 KB on mobile (down from 512 KB), 384 KB on desktop
+    const prefetchBytes = isMobile ? 262143 : 393215;
+    const delay = isMobile ? 250 : 1800;
 
-    const toFetch: string[] = [];
+    const toFetch = new Set<string>();
 
-    // Next scene
-    const nextIdx = currentSceneIndex + 1;
-    if (nextIdx < work.scenes.length) {
-      const nextUrl = work.scenes[nextIdx]?.proxiedVideoUrl ?? work.scenes[nextIdx]?.videoUrl;
-      if (nextUrl) toFetch.push(nextUrl);
+    if (isMobile) {
+      // Only ±1 scene within the same work (same as the < > arrows).
+      // Skip ±1 project prefetch — the active video's buffering takes priority.
+      const sceneCount = work.scenes.length;
+      if (sceneCount > 1) {
+        const prevSceneIdx = (currentSceneIndex - 1 + sceneCount) % sceneCount;
+        const nextSceneIdx = (currentSceneIndex + 1) % sceneCount;
+
+        const prevSceneUrl = work.scenes[prevSceneIdx]?.proxiedVideoUrl ?? work.scenes[prevSceneIdx]?.videoUrl;
+        const nextSceneUrl = work.scenes[nextSceneIdx]?.proxiedVideoUrl ?? work.scenes[nextSceneIdx]?.videoUrl;
+        // Don't prefetch the same URL we're already playing
+        const activeUrl = work.scenes[currentSceneIndex]?.proxiedVideoUrl ?? work.scenes[currentSceneIndex]?.videoUrl;
+        if (prevSceneUrl && prevSceneUrl !== activeUrl) toFetch.add(prevSceneUrl);
+        if (nextSceneUrl && nextSceneUrl !== activeUrl) toFetch.add(nextSceneUrl);
+      }
+    } else {
+      // Desktop: prefetch only next scene, non-wrapping
+      const nextIdx = currentSceneIndex + 1;
+      if (nextIdx < work.scenes.length) {
+        const nextUrl = work.scenes[nextIdx]?.proxiedVideoUrl ?? work.scenes[nextIdx]?.videoUrl;
+        if (nextUrl) toFetch.add(nextUrl);
+      }
     }
 
-    // Previous scene (mobile only — common swipe-back pattern)
-    if (isMobile && currentSceneIndex > 0) {
-      const prevUrl = work.scenes[currentSceneIndex - 1]?.proxiedVideoUrl ?? work.scenes[currentSceneIndex - 1]?.videoUrl;
-      if (prevUrl) toFetch.push(prevUrl);
-    }
-
-    if (toFetch.length === 0) return;
+    if (toFetch.size === 0) return;
 
     const timer = window.setTimeout(() => {
       toFetch.forEach((url) => {
@@ -684,6 +726,7 @@ export default function VideoGrid({ works }: VideoGridProps) {
     if (!video) return;
 
     if (!isPlaying) {
+      cancelPendingMobileAutoplay();
       // Force silence when leaving the player
       video.pause();
       video.muted = true;
@@ -698,6 +741,9 @@ export default function VideoGrid({ works }: VideoGridProps) {
     const newSrc = scene.proxiedVideoUrl ?? scene.videoUrl;
     const poster = resolveScenePoster(currentWorkIndex, currentSceneIndex, scene);
 
+    cancelPendingMobileAutoplay();
+    mobileUserPausedRef.current = false;
+
     // Pause + clear old source before loading new one
     video.pause();
     if (poster) video.poster = poster;
@@ -709,7 +755,7 @@ export default function VideoGrid({ works }: VideoGridProps) {
     let cancelled = false;
 
     const play = async () => {
-      if (cancelled) return;
+      if (cancelled || mobileUserPausedRef.current) return;
       try {
         video.muted = false;
         video.volume = 1.0;
@@ -730,22 +776,53 @@ export default function VideoGrid({ works }: VideoGridProps) {
       }
     };
 
-    // Use 'loadeddata' — fires earlier than 'canplay' for faster start
+    // Use 'canplaythrough' — Safari iOS can stall right after 'loadeddata';
+    // 'canplaythrough' signals the browser has enough data to play without buffering.
     const handleReady = () => play();
-    video.addEventListener('loadeddata', handleReady, { once: true });
+    mobileCanPlaythroughHandlerRef.current = handleReady;
+    mobileAutoplayVideoRef.current = video;
+    video.addEventListener('canplaythrough', handleReady, { once: true });
 
-    // Safety timeout: force play after 2s even if event hasn't fired
-    const timer = setTimeout(() => {
-      video.removeEventListener('loadeddata', handleReady);
+    // Safety timeout: force play after 1.5s even if event hasn't fired
+    const timer = window.setTimeout(() => {
+      video.removeEventListener('canplaythrough', handleReady);
       play();
-    }, 2000);
+    }, 1500);
+    mobileAutoplayTimerRef.current = timer;
 
     return () => {
       cancelled = true;
-      video.removeEventListener('loadeddata', handleReady);
-      clearTimeout(timer);
+      cancelPendingMobileAutoplay();
     };
-  }, [isMobile, isPlaying, currentWorkIndex, currentSceneIndex, works, resolveScenePoster]);
+  }, [isMobile, isPlaying, currentWorkIndex, currentSceneIndex, works, resolveScenePoster, cancelPendingMobileAutoplay]);
+
+  // Inject a <link rel="preload" as="video"> in <head> for the active video on mobile.
+  // This lets Safari's speculative loader start fetching before the <video> src is set.
+  useEffect(() => {
+    if (!isMobile || !isPlaying) {
+      // Remove hint when not playing
+      document.getElementById('__mobile_video_preload')?.remove();
+      return;
+    }
+    const scene = works[currentWorkIndex]?.scenes?.[currentSceneIndex];
+    const url = scene?.proxiedVideoUrl ?? scene?.videoUrl;
+    if (!url) return;
+
+    let link = document.getElementById('__mobile_video_preload') as HTMLLinkElement | null;
+    if (!link) {
+      link = document.createElement('link');
+      link.id = '__mobile_video_preload';
+      link.rel = 'preload';
+      (link as any).as = 'video';
+      document.head.appendChild(link);
+    }
+    link.href = url;
+
+    return () => {
+      // Remove on cleanup (scene change will re-run with new URL)
+      document.getElementById('__mobile_video_preload')?.remove();
+    };
+  }, [isMobile, isPlaying, currentWorkIndex, currentSceneIndex, works]);
 
   // Listen for global closePlayer event (emitted by nav back button) to close mobile modal
   useEffect(() => {
@@ -969,10 +1046,13 @@ export default function VideoGrid({ works }: VideoGridProps) {
                     showArrowsForAWhile();
                     const vid = e.currentTarget;
                     if (vid.paused) {
+                      mobileUserPausedRef.current = false;
                       vid.muted = false;
                       vid.volume = 1.0;
                       vid.play().catch(() => {});
                     } else {
+                      mobileUserPausedRef.current = true;
+                      cancelPendingMobileAutoplay();
                       vid.pause();
                     }
                   }}
@@ -1044,14 +1124,12 @@ export default function VideoGrid({ works }: VideoGridProps) {
                       data-work-index={workIdx}
                     >
                       {firstScene ? (
-                        <video
-                          src={firstScene.proxiedVideoUrl ?? firstScene.videoUrl}
-                          crossOrigin="anonymous"
-                          poster={resolveScenePoster(workIdx, 0, firstScene)}
-                          playsInline
-                          preload="metadata"
-                          loop
-                          muted
+                        <img
+                          className="mobile-video"
+                          src={resolveScenePoster(workIdx, 0, firstScene)}
+                          alt={work.title}
+                          loading={workIdx < 2 ? 'eager' : 'lazy'}
+                          decoding="async"
                         />
                       ) : (
                         <div className="project-placeholder">No scenes</div>

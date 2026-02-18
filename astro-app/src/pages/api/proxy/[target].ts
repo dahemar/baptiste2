@@ -166,9 +166,11 @@ export const GET: APIRoute = async ({ params, request }) => {
 
     headers.set('Access-Control-Allow-Origin', '*');
     headers.set('Accept-Ranges', res.headers.get('accept-ranges') || 'bytes');
-    // Cache video chunks in the browser for 24h — assets are immutable release files
-    headers.set('Cache-Control', 'public, max-age=86400, s-maxage=604800, stale-while-revalidate=86400');
-    // Ensure CDN caches different Range responses separately
+    // R2 release assets are content-addressed and never mutated — cache forever.
+    // 'immutable' tells Safari/Chrome not to revalidate on back-navigation,
+    // eliminating conditional-GET round-trips that add latency on every revisit.
+    headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+    // Ensure browser caches different Range responses separately
     headers.set('Vary', 'Range');
 
     return new Response(res.body, { status: res.status, headers });
