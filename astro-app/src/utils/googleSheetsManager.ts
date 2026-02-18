@@ -259,6 +259,10 @@ export async function fetchFromGoogleSheets(): Promise<any[]> {
         process.env.THEATRE_WORKS_RANGE || 'THEATRE_WORKS',
         process.env.THEATRE_SCENES_RANGE || 'THEATRE_SCENES',
         process.env.THEATRE_CREDITS_RANGE || 'THEATRE_CREDITS',
+        // Actual tab names in the published sheet
+        'theatre_works',
+        'theatre-works-scenes',
+        'theatre-works-credits',
         'theatre_works_works',
         'theatre_works_scenes',
         'theatre_works_credits',
@@ -325,6 +329,10 @@ export async function fetchFromGoogleSheets(): Promise<any[]> {
           'THEATRE_WORKS',
           'THEATRE_SCENES',
           'THEATRE_CREDITS',
+          // Actual tab names in the published sheet
+          'theatre_works',
+          'theatre-works-scenes',
+          'theatre-works-credits',
           // Legacy-ish names
           'theatre_works_works',
           'theatre_works_scenes',
