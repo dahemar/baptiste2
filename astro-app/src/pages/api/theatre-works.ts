@@ -87,6 +87,11 @@ function normalizeWorksForProxy<T extends any[]>(works: T): T {
 export const GET: APIRoute = async (context) => {
   console.log('[api/theatre-works] GET handler called', { url: context?.request?.url?.toString?.() });
 
+  const jsonHeaders = {
+    'Content-Type': 'application/json',
+    // This endpoint is dynamic (Google Sheets as source of truth). Avoid caching empty/stale responses on Vercel.
+    'Cache-Control': 'no-store',
+  };
   // TEMPORARY: quick cache-first responder with small timeout on remote fetch.
   try {
     const url = new URL(context.request.url);
@@ -104,9 +109,9 @@ export const GET: APIRoute = async (context) => {
       const fresh = await Promise.race([fetchPromise, timeout]);
       if (fresh && Array.isArray(fresh)) {
         const normalized = normalizeWorksForProxy(fresh as any[]);
-        return new Response(JSON.stringify(normalized), { headers: { 'Content-Type': 'application/json' } });
+          return new Response(JSON.stringify(normalized), { headers: jsonHeaders });
       }
-      return new Response(JSON.stringify([]), { headers: { 'Content-Type': 'application/json' } });
+        return new Response(JSON.stringify([]), { headers: jsonHeaders });
     }
 
     const cached = force === '1' ? null : await loadFromCache();
@@ -117,7 +122,7 @@ export const GET: APIRoute = async (context) => {
       } catch (e) {
         console.log('[api/theatre-works] returning cached works count=', normalized.length);
       }
-      return new Response(JSON.stringify(normalized), { headers: { 'Content-Type': 'application/json' } });
+        return new Response(JSON.stringify(normalized), { headers: jsonHeaders });
     }
 
     console.log('[api/theatre-works] cache empty, attempting fetchFromGoogleSheets() with timeout');
@@ -130,16 +135,16 @@ export const GET: APIRoute = async (context) => {
       const normalized = normalizeWorksForProxy(fresh as any[]);
       await saveToCache(normalized);
       console.log('[api/theatre-works] fetched and cached works count=', normalized.length);
-      return new Response(JSON.stringify(normalized), { headers: { 'Content-Type': 'application/json' } });
+        return new Response(JSON.stringify(normalized), { headers: jsonHeaders });
     }
 
-    return new Response(JSON.stringify([]), { headers: { 'Content-Type': 'application/json' } });
+      return new Response(JSON.stringify([]), { headers: jsonHeaders });
   } catch (err) {
     const stack = (err as any)?.stack ?? String(err);
     console.error('[api/theatre-works] error in GET handler', stack);
-    return new Response(JSON.stringify({ error: 'Failed to load theatre works', detail: String(err) }), {
+      return new Response(JSON.stringify({ error: 'Failed to load theatre works', detail: String(err) }), {
       status: 500,
-      headers: { 'Content-Type': 'application/json' },
+        headers: jsonHeaders,
     });
   }
 };
