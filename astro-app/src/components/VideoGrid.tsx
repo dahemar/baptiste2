@@ -194,8 +194,20 @@ export default function VideoGrid({ works }: VideoGridProps) {
 
     const extractFrame = async (videoUrl: string): Promise<string | null> => {
       return await new Promise((resolve) => {
+        try {
+          const u = new URL(String(videoUrl || ''), window.location.href);
+          // Frame extraction relies on Canvas pixel reads; for cross-origin media that
+          // does not explicitly allow CORS, this will throw a security error.
+          // Skip extraction in that case — posters already come from local thumbnails.
+          if (u.origin !== window.location.origin) {
+            resolve(null);
+            return;
+          }
+        } catch {
+          // ignore and try anyway for relative URLs
+        }
+
         const video = document.createElement('video');
-        video.crossOrigin = 'anonymous';
         video.preload = 'metadata';
         video.muted = true;
         video.playsInline = true;
@@ -1118,7 +1130,6 @@ export default function VideoGrid({ works }: VideoGridProps) {
               >
                 <video
                   ref={mobileFixedVideoRef}
-                  crossOrigin="anonymous"
                   poster={resolveScenePoster(currentWorkIndex, currentSceneIndex, works[currentWorkIndex]?.scenes?.[currentSceneIndex])}
                   loop
                   playsInline
@@ -1312,7 +1323,6 @@ export default function VideoGrid({ works }: VideoGridProps) {
                           ? (scene.proxiedVideoUrl ?? scene.videoUrl)
                           : undefined
                       }
-                      crossOrigin="anonymous"
                       poster={resolveScenePoster(workIdx, sceneIdx, scene)}
                       playsInline
                       preload={
