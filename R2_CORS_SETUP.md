@@ -17,23 +17,31 @@ Configure CORS policy in Cloudflare R2 dashboard:
     "AllowedOrigins": [
       "http://localhost:4321",
       "http://[::1]:4321",
+      "https://blechapelain.work",
+      "https://www.blechapelain.work",
       "https://baptiste2.vercel.app",
       "https://*.vercel.app"
     ],
     "AllowedMethods": [
       "GET",
-      "HEAD"
+      "HEAD",
+      "OPTIONS"
     ],
     "AllowedHeaders": [
       "Range",
-      "Content-Type"
+      "Content-Type",
+      "If-Modified-Since",
+      "If-None-Match"
     ],
     "ExposeHeaders": [
+      "Accept-Ranges",
       "Content-Length",
       "Content-Range",
-      "Content-Type"
+      "Content-Type",
+      "ETag",
+      "Last-Modified"
     ],
-    "MaxAgeSeconds": 3600
+    "MaxAgeSeconds": 86400
   }
 ]
 ```
@@ -43,7 +51,7 @@ Configure CORS policy in Cloudflare R2 dashboard:
 ## Verification
 After configuring CORS, test with:
 ```bash
-curl -I -H "Origin: http://localhost:4321" https://pub-16fb774f4ada4a69b6c70bc856201eeb.r2.dev/Elie.Concours.1.mp4
+curl -I -H "Origin: https://www.blechapelain.work" https://pub-f04cf0f8494f457e889559aa0b6e57b7.r2.dev/Elie.Concours.1.mp4
 ```
 
 You should see:

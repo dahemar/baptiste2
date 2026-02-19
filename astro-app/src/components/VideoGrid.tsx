@@ -139,6 +139,42 @@ export default function VideoGrid({ works }: VideoGridProps) {
     generatedThumbsRef.current = generatedThumbnails;
   }, [generatedThumbnails]);
 
+  const [r2CorsModeEnabled, setR2CorsModeEnabled] = useState(true);
+
+  const isR2Url = useCallback((maybeUrl?: string | null) => {
+    if (!maybeUrl) return false;
+    try {
+      const u = new URL(maybeUrl, window.location.href);
+      return u.hostname.endsWith('.r2.dev');
+    } catch {
+      return false;
+    }
+  }, []);
+
+  const shouldUseCrossOriginAnonymous = useCallback((maybeUrl?: string | null) => {
+    // Only force CORS mode for R2. Other third-party hosts might not send ACAO and
+    // would break playback if we set crossOrigin.
+    return r2CorsModeEnabled && isR2Url(maybeUrl);
+  }, [r2CorsModeEnabled, isR2Url]);
+
+  const handlePossibleCorsPlaybackError = useCallback((el: HTMLVideoElement, url: string) => {
+    // If CORS isn't configured on R2 yet, loading with crossOrigin=anonymous will fail.
+    // Fallback: disable CORS mode globally and reload this element without crossOrigin.
+    if (!shouldUseCrossOriginAnonymous(url)) return;
+    try {
+      const src = el.currentSrc || el.src || url;
+      el.pause();
+      // Remove crossOrigin before reloading.
+      el.crossOrigin = null;
+      el.removeAttribute('crossorigin');
+      el.src = src;
+      el.load();
+    } catch {
+      // ignore
+    }
+    setR2CorsModeEnabled(false);
+  }, [shouldUseCrossOriginAnonymous]);
+
   useEffect(() => {
     // Skip expensive thumbnail extraction on mobile — server-derived posters are enough
     if (isMobile) return;
@@ -194,20 +230,20 @@ export default function VideoGrid({ works }: VideoGridProps) {
 
     const extractFrame = async (videoUrl: string): Promise<string | null> => {
       return await new Promise((resolve) => {
+        const video = document.createElement('video');
         try {
           const u = new URL(String(videoUrl || ''), window.location.href);
-          // Frame extraction relies on Canvas pixel reads; for cross-origin media that
-          // does not explicitly allow CORS, this will throw a security error.
-          // Skip extraction in that case — posters already come from local thumbnails.
           if (u.origin !== window.location.origin) {
-            resolve(null);
-            return;
+            // Only attempt cross-origin extraction when CORS mode is enabled and this is R2.
+            if (!shouldUseCrossOriginAnonymous(videoUrl)) {
+              resolve(null);
+              return;
+            }
+            video.crossOrigin = 'anonymous';
           }
         } catch {
-          // ignore and try anyway for relative URLs
+          // ignore
         }
-
-        const video = document.createElement('video');
         video.preload = 'metadata';
         video.muted = true;
         video.playsInline = true;
@@ -1130,6 +1166,7 @@ export default function VideoGrid({ works }: VideoGridProps) {
               >
                 <video
                   ref={mobileFixedVideoRef}
+                  crossOrigin={shouldUseCrossOriginAnonymous(works[currentWorkIndex]?.scenes?.[currentSceneIndex]?.proxiedVideoUrl ?? works[currentWorkIndex]?.scenes?.[currentSceneIndex]?.videoUrl) ? 'anonymous' : undefined}
                   poster={resolveScenePoster(currentWorkIndex, currentSceneIndex, works[currentWorkIndex]?.scenes?.[currentSceneIndex])}
                   loop
                   playsInline
@@ -1137,6 +1174,10 @@ export default function VideoGrid({ works }: VideoGridProps) {
                   controls={false}
                   disablePictureInPicture
                   controlsList="nodownload noplaybackrate noremoteplayback nofullscreen"
+                  onError={(e) => {
+                    const url = works[currentWorkIndex]?.scenes?.[currentSceneIndex]?.proxiedVideoUrl ?? works[currentWorkIndex]?.scenes?.[currentSceneIndex]?.videoUrl ?? '';
+                    handlePossibleCorsPlaybackError(e.currentTarget, url);
+                  }}
                   onClick={(e) => {
                     e.stopPropagation();
                     showArrowsForAWhile();
@@ -1323,6 +1364,7 @@ export default function VideoGrid({ works }: VideoGridProps) {
                           ? (scene.proxiedVideoUrl ?? scene.videoUrl)
                           : undefined
                       }
+                      crossOrigin={shouldUseCrossOriginAnonymous(scene.proxiedVideoUrl ?? scene.videoUrl) ? 'anonymous' : undefined}
                       poster={resolveScenePoster(workIdx, sceneIdx, scene)}
                       playsInline
                       preload={
@@ -1333,6 +1375,10 @@ export default function VideoGrid({ works }: VideoGridProps) {
                         'none'
                       }
                       loop
+                      onError={(e) => {
+                        const url = scene.proxiedVideoUrl ?? scene.videoUrl;
+                        handlePossibleCorsPlaybackError(e.currentTarget, url);
+                      }}
                       onPlaying={() => {
                         const key = `${workIdx}:${sceneIdx}`;
                         setDesktopPosterOverlay((prev) => (prev.key === key ? { key: null } : prev));

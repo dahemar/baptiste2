@@ -192,10 +192,18 @@ Add CORS policy in R2 bucket settings:
 ```json
 [
   {
-    "AllowedOrigins": ["https://baptiste2.vercel.app", "http://localhost:4321"],
-    "AllowedMethods": ["GET", "HEAD"],
-    "AllowedHeaders": ["*"],
-    "MaxAgeSeconds": 3600
+    "AllowedOrigins": [
+      "http://localhost:4321",
+      "http://[::1]:4321",
+      "https://blechapelain.work",
+      "https://www.blechapelain.work",
+      "https://baptiste2.vercel.app",
+      "https://*.vercel.app"
+    ],
+    "AllowedMethods": ["GET", "HEAD", "OPTIONS"],
+    "AllowedHeaders": ["Range", "Content-Type", "If-Modified-Since", "If-None-Match"],
+    "ExposeHeaders": ["Accept-Ranges", "Content-Length", "Content-Range", "Content-Type", "ETag", "Last-Modified"],
+    "MaxAgeSeconds": 86400
   }
 ]
 ```

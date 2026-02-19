@@ -44,6 +44,7 @@ try {
                 controls
                 preload="metadata"
                 playsinline
+                crossorigin={item.videoUrl.includes('.r2.dev') ? 'anonymous' : undefined}
               />
             ) : item.thumbnailUrl ? (
               <img class="av-image" src={item.thumbnailUrl} alt={item.title} loading="lazy" />
