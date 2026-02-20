@@ -3,10 +3,11 @@
 const { google } = require('googleapis');
 
 function parseArgs(argv) {
-  const out = { spreadsheetId: null };
+  const out = { spreadsheetId: null, migrateAudiovisual: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--spreadsheetId') out.spreadsheetId = argv[++i];
+    if (a === '--migrateAudiovisual') out.migrateAudiovisual = true;
   }
   return out;
 }
@@ -112,7 +113,58 @@ async function main() {
     });
   }
 
+  if (args.migrateAudiovisual) {
+    // Auto-fill row_type for existing rows:
+    // - 'project' if project_title set and no media URL
+    // - 'video' if video_url/thumbnail_url/external_url set
+    const avAll = await sheets.spreadsheets.values.get({ spreadsheetId, range: range('audiovisual', 'A1:Z500') });
+    const values = avAll.data.values || [];
+    if (values.length >= 2) {
+      const headers = (values[0] || []).map(h => String(h || '').trim().toLowerCase());
+      const idx = (name) => headers.findIndex(h => h === name);
+      const idxRowType = idx('row_type');
+      const idxProject = idx('project_title');
+      const idxVideo = idx('video_url');
+      const idxThumb = idx('thumbnail_url');
+      const idxExt = idx('external_url');
+
+      if (idxRowType >= 0) {
+        const outCol = [];
+        let anyChanges = false;
+        for (let r = 1; r < values.length; r++) {
+          const row = values[r] || [];
+          const existingType = String(row[idxRowType] || '').trim().toLowerCase();
+          const projectTitle = idxProject >= 0 ? String(row[idxProject] || '').trim() : '';
+          const videoUrl = idxVideo >= 0 ? String(row[idxVideo] || '').trim() : '';
+          const thumbUrl = idxThumb >= 0 ? String(row[idxThumb] || '').trim() : '';
+          const externalUrl = idxExt >= 0 ? String(row[idxExt] || '').trim() : '';
+          const hasMedia = !!(videoUrl || thumbUrl || externalUrl);
+
+          let nextType = existingType;
+          if (!nextType) {
+            if (hasMedia) nextType = 'video';
+            else if (projectTitle) nextType = 'project';
+          }
+
+          if (nextType !== existingType) anyChanges = true;
+          outCol.push([nextType]);
+        }
+
+        if (anyChanges) {
+          const col = colLetter(idxRowType + 1);
+          await sheets.spreadsheets.values.update({
+            spreadsheetId,
+            range: range('audiovisual', `${col}2:${col}${outCol.length + 1}`),
+            valueInputOption: 'RAW',
+            requestBody: { values: outCol },
+          });
+        }
+      }
+    }
+  }
+
   console.log('OK: ensured contact sheet + audiovisual columns');
+  if (args.migrateAudiovisual) console.log('OK: audiovisual row_type migration applied (up to first 500 rows)');
 }
 
 main().catch((e) => {

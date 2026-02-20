@@ -17,15 +17,23 @@ export interface MusicRelease {
   coverUrl?: string;
 }
 
-export interface AudiovisualWork {
+export interface AudiovisualVideo {
   id: string;
-  projectTitle?: string;
-  title: string;
-  credits: string;
-  year: string;
-  videoUrl: string;
+  title?: string;
+  credits?: string;
+  year?: string;
+  videoUrl?: string;
   thumbnailUrl?: string;
   externalUrl?: string;
+}
+
+export interface AudiovisualProject {
+  id: string;
+  projectTitle?: string;
+  footerName?: string;
+  footerCredits?: string;
+  footerYear?: string;
+  videos: AudiovisualVideo[];
 }
 
 export interface ContactInfo {
@@ -76,11 +84,59 @@ function parseCsvLine(line: string): string[] {
 }
 
 function parseCsvRows(csvText: string): string[][] {
-  return csvText
-    .split('\n')
-    .map((line) => line.replace(/\r$/, ''))
-    .filter((line) => line.trim().length > 0)
-    .map((line) => parseCsvLine(line));
+  // CSV exported from Google Sheets can include newlines inside quoted cells.
+  // We must parse the whole text as a stream rather than splitting by \n.
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let current = '';
+  let inQuotes = false;
+
+  const pushField = () => {
+    row.push(current);
+    current = '';
+  };
+
+  const pushRow = () => {
+    // Ignore fully empty trailing rows
+    const hasContent = row.some((c) => String(c || '').trim().length > 0);
+    if (hasContent) rows.push(row);
+    row = [];
+  };
+
+  for (let i = 0; i < csvText.length; i++) {
+    const char = csvText[i];
+    const next = csvText[i + 1];
+
+    if (char === '"') {
+      if (inQuotes && next === '"') {
+        current += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+
+    if (!inQuotes && char === ',') {
+      pushField();
+      continue;
+    }
+
+    if (!inQuotes && (char === '\n' || char === '\r')) {
+      // Handle CRLF
+      if (char === '\r' && next === '\n') i++;
+      pushField();
+      pushRow();
+      continue;
+    }
+
+    current += char;
+  }
+
+  // Flush last row
+  pushField();
+  pushRow();
+  return rows;
 }
 
 function mapRows(rows: string[][]): Row[] {
@@ -261,7 +317,7 @@ export async function loadMusicData(): Promise<{ allReleasesUrl: string; release
   return { allReleasesUrl, releases };
 }
 
-export async function loadAudiovisualData(): Promise<AudiovisualWork[]> {
+export async function loadAudiovisualData(): Promise<AudiovisualProject[]> {
   const envRange = process.env.AUDIOVISUAL_SHEET_RANGE;
   const rows = await loadSectionRows({
     cacheKey: 'audiovisual',
@@ -276,43 +332,96 @@ export async function loadAudiovisualData(): Promise<AudiovisualWork[]> {
     localFileName: 'audiovisual.csv',
   });
 
-  // Support optional project grouping in the Sheet.
-  // Two supported patterns:
-  // 1) Repeated column on each row: project_title
-  // 2) A dedicated header row with row_type=project and project_title set,
-  //    followed by video rows with row_type=video and project_title optional.
+  // Sheet supports project grouping so projects with multiple videos can share:
+  // - a single title at the top (project_title)
+  // - a single footer (title/credits/year) rendered once per project
+  // Rows can be:
+  // - row_type=project: defines project_title + optional footer fields
+  // - row_type=video: defines video_url/thumbnail/external (+ optional per-video meta)
+  // Legacy rows without row_type still work.
+
+  const projects: AudiovisualProject[] = [];
+  let current: AudiovisualProject | null = null;
   let currentProjectTitle = '';
+  let projectCounter = 0;
+  let videoCounter = 0;
 
-  const out: AudiovisualWork[] = [];
+  const ensureProject = (projectTitle: string) => {
+    const key = (projectTitle || '').trim() || '__no_project__';
+    if (!current || (String(current.projectTitle || '').trim() || '__no_project__') !== key) {
+      projectCounter++;
+      current = {
+        id: `p${projectCounter}`,
+        projectTitle: projectTitle ? projectTitle : undefined,
+        footerName: undefined,
+        footerCredits: undefined,
+        footerYear: undefined,
+        videos: [],
+      };
+      projects.push(current);
+      videoCounter = 0;
+    }
+    return current;
+  };
+
   for (const row of rows) {
-    const rowType = rowValue(row, ['row_type', 'type', 'rowType']).toLowerCase();
+    const rowTypeRaw = rowValue(row, ['row_type', 'type', 'rowType']);
+    const rowType = String(rowTypeRaw || '').trim().toLowerCase();
     const projectTitle = rowValue(row, ['project_title', 'project', 'projectTitle']);
-
-    if (rowType === 'project' && projectTitle) {
-      currentProjectTitle = projectTitle;
-      continue;
-    }
-
     const title = rowValue(row, ['title', 'Title']);
-    if (!title) {
-      // If it's a blank row but sets a project title, treat it as a header.
-      if (projectTitle) currentProjectTitle = projectTitle;
+    const credits = rowValue(row, ['credits', 'Credits']);
+    const year = rowValue(row, ['year', 'Year']);
+    const videoUrl = rowValue(row, ['video_url', 'video', 'Video_URL']);
+    const thumbnailUrl = rowValue(row, ['thumbnail_url', 'thumbnail', 'image_url']);
+    const externalUrl = rowValue(row, ['external_url', 'url', 'link']);
+
+    const hasAnyMedia = !!(videoUrl || thumbnailUrl || externalUrl);
+
+    if ((rowType === 'project' || (!hasAnyMedia && !!projectTitle)) && projectTitle) {
+      currentProjectTitle = projectTitle;
+      const p = ensureProject(projectTitle);
+      if (title && !p.footerName) p.footerName = title;
+      if (credits && !p.footerCredits) p.footerCredits = credits;
+      if (year && !p.footerYear) p.footerYear = year;
       continue;
     }
 
-    out.push({
-      id: rowValue(row, ['id', 'ID']),
-      projectTitle: projectTitle || currentProjectTitle || undefined,
-      title,
-      credits: rowValue(row, ['credits', 'Credits']),
-      year: rowValue(row, ['year', 'Year']),
-      videoUrl: rowValue(row, ['video_url', 'video', 'Video_URL']),
-      thumbnailUrl: rowValue(row, ['thumbnail_url', 'thumbnail', 'image_url']),
-      externalUrl: rowValue(row, ['external_url', 'url', 'link']),
+    // If we got here and the row sets a project title, treat it as a boundary.
+    if (projectTitle) currentProjectTitle = projectTitle;
+    const p = ensureProject(projectTitle || currentProjectTitle);
+
+    if (!hasAnyMedia) {
+      // Ignore blank lines that are not project headers.
+      continue;
+    }
+
+    videoCounter++;
+    const id = rowValue(row, ['id', 'ID']) || `${p.id}-v${videoCounter}`;
+    p.videos.push({
+      id,
+      title: title || undefined,
+      credits: credits || undefined,
+      year: year || undefined,
+      videoUrl: videoUrl || undefined,
+      thumbnailUrl: thumbnailUrl || undefined,
+      externalUrl: externalUrl || undefined,
     });
   }
 
-  return out;
+  // If a project has no explicit footer, but only one video provides meta,
+  // treat that as the project footer so it can be shown once.
+  for (const p of projects) {
+    if (p.footerName || p.footerCredits || p.footerYear) continue;
+    if (p.videos.length < 2) continue;
+    const candidates = p.videos.filter((v) => (v.title || v.credits || v.year));
+    if (candidates.length !== 1) continue;
+    const v = candidates[0];
+    p.footerName = v.title;
+    p.footerCredits = v.credits;
+    p.footerYear = v.year;
+  }
+
+  return projects;
 }
 
 export async function loadContactData(): Promise<ContactInfo> {

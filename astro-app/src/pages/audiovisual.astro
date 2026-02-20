@@ -3,24 +3,11 @@ export const prerender = false;
 import '../styles/audiovisual.css';
 import { loadAudiovisualData } from '../utils/sectionContentManager';
 
-let items = [];
+let projects = [];
 try {
-  items = await loadAudiovisualData();
+  projects = await loadAudiovisualData();
 } catch {
-  items = [];
-}
-
-const groups = [];
-let current = null;
-
-for (const item of items) {
-  const projectTitle = String(item?.projectTitle || '').trim();
-  const key = projectTitle || '__no_project__';
-  if (!current || current.key !== key) {
-    current = { key, projectTitle: projectTitle || '', items: [] };
-    groups.push(current);
-  }
-  current.items.push(item);
+  projects = [];
 }
 ---
 
@@ -48,42 +35,60 @@ for (const item of items) {
 
   <div class="av-page">
     <div class="av-list">
-      {groups.map((group, groupIdx) => (
-        <div class="av-project-group" data-project={group.projectTitle || undefined}>
-          {groupIdx > 0 && <div class="av-divider" aria-hidden="true" />}
+      {projects.map((project, projectIdx) => {
+        const footerName = String(project?.footerName || '').trim();
+        const footerCredits = String(project?.footerCredits || '').trim();
+        const footerYear = String(project?.footerYear || '').trim();
+        const hasFooter = !!(footerName || footerCredits || footerYear);
 
-          {group.projectTitle && (
-            <div class="av-project-title">{group.projectTitle}</div>
-          )}
+        return (
+          <div class="av-project-group" data-project={project.projectTitle || undefined}>
+            {projectIdx > 0 && <div class="av-divider" aria-hidden="true" />}
 
-          {group.items.map(item => (
-            <div key={item.id} class="av-item">
-              <div class="av-media">
-                {item.videoUrl ? (
-                  <video
-                    class="av-video"
-                    src={item.videoUrl}
-                    poster={item.thumbnailUrl || undefined}
-                    controls
-                    preload="metadata"
-                    playsinline
-                    crossorigin={item.videoUrl.includes('.r2.dev') ? 'anonymous' : undefined}
-                  />
-                ) : item.thumbnailUrl ? (
-                  <img class="av-image" src={item.thumbnailUrl} alt={item.title} loading="lazy" />
-                ) : (
-                  <div class="av-placeholder" aria-label="placeholder" />
+            {project.projectTitle && (
+              <div class="av-project-title">{project.projectTitle}</div>
+            )}
+
+            {project.videos.map((video) => (
+              <div key={video.id} class="av-item">
+                <div class="av-media">
+                  {video.videoUrl ? (
+                    <video
+                      class="av-video"
+                      src={video.videoUrl}
+                      poster={video.thumbnailUrl || undefined}
+                      controls
+                      preload="metadata"
+                      playsinline
+                      crossorigin={video.videoUrl.includes('.r2.dev') ? 'anonymous' : undefined}
+                    />
+                  ) : video.thumbnailUrl ? (
+                    <img class="av-image" src={video.thumbnailUrl} alt="" loading="lazy" />
+                  ) : (
+                    <div class="av-placeholder" aria-label="placeholder" />
+                  )}
+                </div>
+
+                {!hasFooter && (video.title || video.credits || video.year) && (
+                  <div class="av-meta">
+                    {video.title && <div class="av-name">{video.title}</div>}
+                    {video.credits && <div class="av-credits">{video.credits}</div>}
+                    {video.year && <div class="av-year">{video.year}</div>}
+                  </div>
                 )}
               </div>
-              <div class="av-meta">
-                <div class="av-name">{item.title}</div>
-                {item.credits && <div class="av-credits">{item.credits}</div>}
-                <div class="av-year">{item.year}</div>
+            ))}
+
+            {hasFooter && (
+              <div class="av-meta av-group-meta">
+                {footerName && <div class="av-name">{footerName}</div>}
+                {footerCredits && <div class="av-credits">{footerCredits}</div>}
+                {footerYear && <div class="av-year">{footerYear}</div>}
               </div>
-            </div>
-          ))}
-        </div>
-      ))}
+            )}
+          </div>
+        );
+      })}
     </div>
   </div>
 </body>
