@@ -19,12 +19,18 @@ export interface MusicRelease {
 
 export interface AudiovisualWork {
   id: string;
+  projectTitle?: string;
   title: string;
   credits: string;
   year: string;
   videoUrl: string;
   thumbnailUrl?: string;
   externalUrl?: string;
+}
+
+export interface ContactInfo {
+  email?: string;
+  instagram?: string;
 }
 
 const memoryCache = new Map<string, any[]>();
@@ -270,17 +276,70 @@ export async function loadAudiovisualData(): Promise<AudiovisualWork[]> {
     localFileName: 'audiovisual.csv',
   });
 
-  return rows
-    .map((row) => ({
+  // Support optional project grouping in the Sheet.
+  // Two supported patterns:
+  // 1) Repeated column on each row: project_title
+  // 2) A dedicated header row with row_type=project and project_title set,
+  //    followed by video rows with row_type=video and project_title optional.
+  let currentProjectTitle = '';
+
+  const out: AudiovisualWork[] = [];
+  for (const row of rows) {
+    const rowType = rowValue(row, ['row_type', 'type', 'rowType']).toLowerCase();
+    const projectTitle = rowValue(row, ['project_title', 'project', 'projectTitle']);
+
+    if (rowType === 'project' && projectTitle) {
+      currentProjectTitle = projectTitle;
+      continue;
+    }
+
+    const title = rowValue(row, ['title', 'Title']);
+    if (!title) {
+      // If it's a blank row but sets a project title, treat it as a header.
+      if (projectTitle) currentProjectTitle = projectTitle;
+      continue;
+    }
+
+    out.push({
       id: rowValue(row, ['id', 'ID']),
-      title: rowValue(row, ['title', 'Title']),
+      projectTitle: projectTitle || currentProjectTitle || undefined,
+      title,
       credits: rowValue(row, ['credits', 'Credits']),
       year: rowValue(row, ['year', 'Year']),
       videoUrl: rowValue(row, ['video_url', 'video', 'Video_URL']),
       thumbnailUrl: rowValue(row, ['thumbnail_url', 'thumbnail', 'image_url']),
       externalUrl: rowValue(row, ['external_url', 'url', 'link']),
-    }))
-    .filter((row) => row.title.length > 0);
+    });
+  }
+
+  return out;
+}
+
+export async function loadContactData(): Promise<ContactInfo> {
+  const envRange = process.env.CONTACT_SHEET_RANGE;
+  const rows = await loadSectionRows({
+    cacheKey: 'contact',
+    rangeNames: [
+      envRange || '',
+      'contact',
+      'CONTACT',
+      'Contact',
+    ].filter(Boolean),
+    gvizTabName: 'contact',
+    csvUrlEnvVar: 'CONTACT_CSV_URL',
+    localFileName: 'contact.csv',
+  });
+
+  // expected columns: key,value (flexible)
+  const info: ContactInfo = {};
+  for (const row of rows) {
+    const key = rowValue(row, ['key', 'Key', 'field', 'Field']).toLowerCase();
+    const value = rowValue(row, ['value', 'Value', 'val']);
+    if (!key || !value) continue;
+    if (key === 'email' || key === 'mail') info.email = value;
+    if (key === 'instagram' || key === 'ig') info.instagram = value;
+  }
+  return info;
 }
 
 export function clearSectionMemoryCache() {

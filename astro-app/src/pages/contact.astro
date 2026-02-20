@@ -1,4 +1,18 @@
 ---
+export const prerender = false;
+import { loadContactData } from '../utils/sectionContentManager';
+
+let contact = { email: '', instagram: '' };
+try {
+  contact = await loadContactData();
+} catch {
+  contact = { email: '', instagram: '' };
+}
+
+const email = String(contact?.email || '').trim();
+const instagramRaw = String(contact?.instagram || '').trim();
+const instagramHandle = instagramRaw.replace(/^@+/, '').trim();
+const instagramUrl = instagramHandle ? `https://instagram.com/${encodeURIComponent(instagramHandle)}` : '';
 ---
 
 <!DOCTYPE html>
@@ -22,6 +36,24 @@
       line-height: 1.6;
       color: #ffffff;
     }
+
+    .contact-links {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      margin-top: 1rem;
+    }
+
+    .contact-link {
+      color: #ffffff;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+      opacity: 0.9;
+    }
+
+    .contact-link:hover {
+      opacity: 1;
+    }
   </style>
 </head>
 <body>
@@ -37,7 +69,21 @@
   </nav>
 
   <div class="contact-page">
-    <p>Contact information will be added here.</p>
+    <div class="contact-links">
+      {email ? (
+        <a class="contact-link" href={`mailto:${email}`}>{email}</a>
+      ) : (
+        <p>Email not set yet.</p>
+      )}
+
+      {instagramUrl ? (
+        <a class="contact-link" href={instagramUrl} target="_blank" rel="noopener noreferrer">
+          @{instagramHandle}
+        </a>
+      ) : (
+        <p>Instagram not set yet.</p>
+      )}
+    </div>
   </div>
 </body>
 </html>

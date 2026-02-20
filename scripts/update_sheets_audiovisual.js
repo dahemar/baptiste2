@@ -35,12 +35,16 @@ async function main() {
   const sheets = google.sheets({ version: 'v4', auth: client });
 
   const requests = [];
-  for (const [oldKey, info] of Object.entries(mapping)) {
-    const oldUrlCandidates = [
-      // The sheet may contain the S3-style URL or a pub domain; try both patterns
-      `https://${process.env.R2_BUCKET || ''}.${new URL(process.env.R2_ENDPOINT || '').host}/${encodeURIComponent(info.destKey)}`,
-      info.publicUrl,
-    ].filter(Boolean);
+  // mapping keys are the original object keys; info.destKey is the new key under Audiovisual/
+  for (const [originalKey, info] of Object.entries(mapping)) {
+    // Build likely old public URLs (encoded and unencoded) and also plain filename matches
+    const endpointHost = (process.env.R2_ENDPOINT && (() => { try { return new URL(process.env.R2_ENDPOINT).host } catch { return null } })()) || null;
+    const bucket = process.env.R2_BUCKET || '';
+    const originalEncodedUrl = endpointHost ? `https://${bucket}.${endpointHost}/${encodeURIComponent(originalKey)}` : null;
+    const originalUnencodedUrl = endpointHost ? `https://${bucket}.${endpointHost}/${originalKey}` : null;
+    const plainFilename = originalKey;
+
+    const oldUrlCandidates = [originalEncodedUrl, originalUnencodedUrl, plainFilename].filter(Boolean);
 
     for (const oldUrl of oldUrlCandidates) {
       requests.push({

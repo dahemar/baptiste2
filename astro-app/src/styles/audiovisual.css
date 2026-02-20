@@ -12,6 +12,26 @@
   gap: 2rem;
 }
 
+.av-project-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.av-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.14);
+  width: 100%;
+}
+
+.av-project-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  opacity: 0.9;
+  text-transform: none !important;
+}
+
 /* Item grande apilado */
 .av-item {
   display: flex;
@@ -80,6 +100,10 @@
   }
   
   .av-list {
+    gap: 1.5rem;
+  }
+
+  .av-project-group {
     gap: 1.5rem;
   }
   
