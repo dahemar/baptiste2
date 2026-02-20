@@ -11,7 +11,28 @@ try {
 
 const email = String(contact?.email || '').trim();
 const instagramRaw = String(contact?.instagram || '').trim();
-const instagramHandle = instagramRaw.replace(/^@+/, '').trim();
+let instagramHandle = '';
+if (instagramRaw) {
+  const raw = instagramRaw.trim();
+  try {
+    let maybeUrl = raw;
+    if (/^www\./i.test(maybeUrl)) maybeUrl = 'https://' + maybeUrl;
+    if (/^https?:\/\//i.test(maybeUrl)) {
+      const parsed = new URL(maybeUrl);
+      if (parsed.hostname.toLowerCase().includes('instagram.com')) {
+        const path = parsed.pathname.replace(/\/+$/,'');
+        const segs = path.split('/').filter(Boolean);
+        instagramHandle = (segs.pop() || '').replace(/^@+/, '');
+      }
+    }
+  } catch (e) {
+    instagramHandle = '';
+  }
+  if (!instagramHandle) {
+    instagramHandle = raw.replace(/^@+/, '').replace(/\/+$/,'').split(/[\/?#]/)[0];
+  }
+  instagramHandle = String(instagramHandle || '').trim();
+}
 const instagramUrl = instagramHandle ? `https://instagram.com/${encodeURIComponent(instagramHandle)}` : '';
 ---
 
