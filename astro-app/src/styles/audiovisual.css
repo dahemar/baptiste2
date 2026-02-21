@@ -25,8 +25,8 @@
 }
 
 .av-project-title {
-  font-size: 0.95rem;
-  font-weight: 600;
+  font-size: 1.15rem;
+  font-weight: 700;
   letter-spacing: 0.01em;
   opacity: 0.9;
   text-transform: none !important;
@@ -69,7 +69,7 @@
 }
 
 .av-name {
-  font-size: 1.125rem;
+  font-size: 0.98rem;
   font-weight: 600;
   text-transform: none !important;
 }
