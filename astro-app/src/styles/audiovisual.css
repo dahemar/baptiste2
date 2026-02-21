@@ -53,6 +53,10 @@
   border-radius: 4px;
 }
 
+.av-video {
+  background-color: rgba(0, 0, 0, 0.65);
+}
+
 .av-placeholder {
   width: 100%;
   aspect-ratio: 16 / 9;
