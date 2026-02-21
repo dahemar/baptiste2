@@ -132,4 +132,15 @@
   .av-placeholder {
     border-radius: 0;
   }
+
+  /* On mobile keep video/image corners square */
+  .av-media {
+    border-radius: 0;
+    overflow: hidden;
+  }
+
+  .av-video,
+  .av-image {
+    border-radius: 0;
+  }
 }
