@@ -75,10 +75,16 @@ try {
                   const credits = String(video?.credits || '').trim();
                   const year = String(video?.year || '').trim();
 
-                  const showTitle = title && title !== footerName;
-                  const showCredits = credits && credits !== footerCredits;
-                  const showYear = year && year !== footerYear;
-                  const showAny = showTitle || showCredits || showYear;
+                  const sameAsFooter =
+                    !!(footerName || footerCredits || footerYear) &&
+                    title === footerName &&
+                    credits === footerCredits &&
+                    year === footerYear;
+
+                  const showTitle = !!title;
+                  const showCredits = !!credits;
+                  const showYear = !!year;
+                  const showAny = (showTitle || showCredits || showYear) && !sameAsFooter;
 
                   if (!showAny) return null;
 

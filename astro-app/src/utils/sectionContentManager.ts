@@ -3,6 +3,7 @@ import path from 'node:path';
 import * as fsSync from 'node:fs';
 
 const IS_VERCEL_RUNTIME = !!process.env.VERCEL;
+const IS_DEV_RUNTIME = process.env.NODE_ENV !== 'production';
 
 type Row = Record<string, string>;
 
@@ -200,7 +201,9 @@ async function tryFetchCsvUrl(url?: string): Promise<string[][] | null> {
   const timeout = setTimeout(() => controller.abort(), 10000);
 
   try {
-    const response = await fetch(url, { signal: controller.signal });
+    const u = new URL(url);
+    u.searchParams.set('_ts', String(Date.now()));
+    const response = await fetch(u.toString(), { signal: controller.signal, cache: 'no-store' });
     if (!response.ok) return null;
     const text = await response.text();
     const rows = parseCsvRows(text);
@@ -235,11 +238,11 @@ async function tryReadLocalCsv(fileName: string): Promise<string[][] | null> {
 async function tryFetchGvizTab(tabName: string): Promise<string[][] | null> {
   const sheetId = getSheetId();
   if (!sheetId || !tabName) return null;
-  const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tabName)}`;
+  const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tabName)}&_ts=${Date.now()}`;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10000);
   try {
-    const res = await fetch(url, { signal: controller.signal });
+    const res = await fetch(url, { signal: controller.signal, cache: 'no-store' });
     if (!res.ok) return null;
     const text = await res.text();
     const rows = parseCsvRows(text);
@@ -259,7 +262,7 @@ async function loadSectionRows(options: {
   localFileName: string;
 }): Promise<Row[]> {
   // On Vercel: always load fresh from Sheets — no disk or memory cache
-  if (!IS_VERCEL_RUNTIME && memoryCache.has(options.cacheKey)) {
+  if (!IS_VERCEL_RUNTIME && !IS_DEV_RUNTIME && memoryCache.has(options.cacheKey)) {
     return memoryCache.get(options.cacheKey) as Row[];
   }
 
@@ -278,7 +281,7 @@ async function loadSectionRows(options: {
   if (!rows && !IS_VERCEL_RUNTIME) rows = await tryReadLocalCsv(options.localFileName);
 
   const mapped = mapRows(rows || []);
-  if (!IS_VERCEL_RUNTIME) memoryCache.set(options.cacheKey, mapped);
+  if (!IS_VERCEL_RUNTIME && !IS_DEV_RUNTIME) memoryCache.set(options.cacheKey, mapped);
   return mapped;
 }
 
@@ -421,23 +424,34 @@ export async function loadAudiovisualData(): Promise<AudiovisualProject[]> {
     p.footerYear = v.year;
   }
 
-  const sharedNonEmptyValue = (videos: AudiovisualVideo[], key: keyof AudiovisualVideo): string | undefined => {
-    const values = videos
-      .map((v) => String((v as any)[key] || '').trim())
-      .filter((s) => s.length > 0);
-    if (values.length < 2) return undefined;
-    const unique = new Set(values);
-    if (unique.size !== 1) return undefined;
-    return values[0];
-  };
-
-  // Deduplicate repeated per-video meta: if multiple videos share the same
-  // non-empty title/credits/year, show that value once in the project footer.
+  // Deduplicate repeated per-video meta ONLY when title+credits(+year) are identical.
+  // If credits differ between videos (even if titles match), keep showing meta per video.
   for (const p of projects) {
     if (p.videos.length < 2) continue;
-    if (!p.footerName) p.footerName = sharedNonEmptyValue(p.videos, 'title');
-    if (!p.footerCredits) p.footerCredits = sharedNonEmptyValue(p.videos, 'credits');
-    if (!p.footerYear) p.footerYear = sharedNonEmptyValue(p.videos, 'year');
+    if (p.footerName || p.footerCredits || p.footerYear) continue;
+
+    const metaVideos = p.videos.filter((v) => {
+      const t = String(v.title || '').trim();
+      const c = String(v.credits || '').trim();
+      const y = String(v.year || '').trim();
+      return !!(t || c || y);
+    });
+    if (metaVideos.length < 2) continue;
+
+    const combos = metaVideos.map((v) => {
+      const t = String(v.title || '').trim();
+      const c = String(v.credits || '').trim();
+      const y = String(v.year || '').trim();
+      return `${t}|||${c}|||${y}`;
+    });
+    const unique = new Set(combos);
+    if (unique.size !== 1) continue;
+
+    const [only] = Array.from(unique);
+    const [t, c, y] = String(only).split('|||');
+    p.footerName = t || undefined;
+    p.footerCredits = c || undefined;
+    p.footerYear = y || undefined;
   }
 
   return projects;
