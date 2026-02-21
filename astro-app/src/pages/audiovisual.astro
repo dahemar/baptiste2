@@ -58,8 +58,9 @@ try {
                       src={video.videoUrl}
                       poster={video.thumbnailUrl || undefined}
                       controls
-                      preload="metadata"
+                      preload={video.thumbnailUrl ? 'none' : 'metadata'}
                       playsinline
+                      webkit-playsinline
                       crossorigin={video.videoUrl.includes('.r2.dev') ? 'anonymous' : undefined}
                     />
                   ) : video.thumbnailUrl ? (
@@ -69,13 +70,26 @@ try {
                   )}
                 </div>
 
-                {!hasFooter && (video.title || video.credits || video.year) && (
-                  <div class="av-meta">
-                    {video.title && <div class="av-name">{video.title}</div>}
-                    {video.credits && <div class="av-credits">{video.credits}</div>}
-                    {video.year && <div class="av-year">{video.year}</div>}
-                  </div>
-                )}
+                {(() => {
+                  const title = String(video?.title || '').trim();
+                  const credits = String(video?.credits || '').trim();
+                  const year = String(video?.year || '').trim();
+
+                  const showTitle = title && title !== footerName;
+                  const showCredits = credits && credits !== footerCredits;
+                  const showYear = year && year !== footerYear;
+                  const showAny = showTitle || showCredits || showYear;
+
+                  if (!showAny) return null;
+
+                  return (
+                    <div class="av-meta">
+                      {showTitle && <div class="av-name">{title}</div>}
+                      {showCredits && <div class="av-credits">{credits}</div>}
+                      {showYear && <div class="av-year">{year}</div>}
+                    </div>
+                  );
+                })()}
               </div>
             ))}
 

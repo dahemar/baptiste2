@@ -421,6 +421,25 @@ export async function loadAudiovisualData(): Promise<AudiovisualProject[]> {
     p.footerYear = v.year;
   }
 
+  const sharedNonEmptyValue = (videos: AudiovisualVideo[], key: keyof AudiovisualVideo): string | undefined => {
+    const values = videos
+      .map((v) => String((v as any)[key] || '').trim())
+      .filter((s) => s.length > 0);
+    if (values.length < 2) return undefined;
+    const unique = new Set(values);
+    if (unique.size !== 1) return undefined;
+    return values[0];
+  };
+
+  // Deduplicate repeated per-video meta: if multiple videos share the same
+  // non-empty title/credits/year, show that value once in the project footer.
+  for (const p of projects) {
+    if (p.videos.length < 2) continue;
+    if (!p.footerName) p.footerName = sharedNonEmptyValue(p.videos, 'title');
+    if (!p.footerCredits) p.footerCredits = sharedNonEmptyValue(p.videos, 'credits');
+    if (!p.footerYear) p.footerYear = sharedNonEmptyValue(p.videos, 'year');
+  }
+
   return projects;
 }
 
