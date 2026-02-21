@@ -52,6 +52,11 @@ try {
             {project.videos.map((video) => (
               <div key={video.id} class="av-item">
                 <div class="av-media">
+                  {/* Render both image and video when a thumbnail exists so mobile Safari always shows a visible preview. */}
+                  {video.thumbnailUrl && (
+                    <img class="av-image" src={video.thumbnailUrl} alt="" loading="lazy" />
+                  )}
+
                   {video.videoUrl ? (
                     <video
                       class="av-video"
@@ -62,11 +67,9 @@ try {
                       playsinline
                       webkit-playsinline
                     />
-                  ) : video.thumbnailUrl ? (
-                    <img class="av-image" src={video.thumbnailUrl} alt="" loading="lazy" />
-                  ) : (
+                  ) : !video.thumbnailUrl ? (
                     <div class="av-placeholder" aria-label="placeholder" />
-                  )}
+                  ) : null}
                 </div>
 
                 {(() => {
@@ -112,3 +115,42 @@ try {
   </div>
 </body>
 </html>
+
+<script>
+  // Small client-side helper: make thumbnail <img> start the sibling <video> on click
+  // and hide the image while the video is playing. Works for mobile Safari where
+  // video.poster can sometimes not render reliably.
+  (function () {
+    try {
+      document.addEventListener('DOMContentLoaded', function () {
+        document.querySelectorAll('.av-media').forEach(function (container) {
+          var video = container.querySelector('video');
+          var img = container.querySelector('img.av-image');
+          if (!video || !img) return;
+
+          // Ensure image is visible by default
+          img.style.display = '';
+
+          img.addEventListener('click', function (e) {
+            e.preventDefault();
+            // user gesture -> should allow play
+            video.play().catch(function () {});
+          });
+
+          video.addEventListener('play', function () {
+            img.style.display = 'none';
+          });
+          video.addEventListener('pause', function () {
+            // show image again when paused or ended
+            if (video.currentTime === 0 || video.ended) img.style.display = '';
+          });
+          video.addEventListener('ended', function () {
+            img.style.display = '';
+          });
+        });
+      });
+    } catch (e) {
+      // noop
+    }
+  })();
+</script>

@@ -42,15 +42,28 @@
 /* Placeholder de imagen/video grande 16:9 */
 .av-media {
   width: 100%;
+  /* Ensure a stable aspect box on browsers that don't support `aspect-ratio` (older iOS Safari). */
+  position: relative;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.av-media::before {
+  /* 16:9 fallback spacer for older browsers */
+  content: '';
+  display: block;
+  padding-top: 56.25%;
 }
 
 .av-video,
 .av-image {
+  position: absolute;
+  inset: 0;
   width: 100%;
+  height: 100%;
   aspect-ratio: 16 / 9;
   object-fit: cover;
   display: block;
-  border-radius: 4px;
 }
 
 .av-video {
