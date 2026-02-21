@@ -53,27 +53,26 @@ try {
               <div key={video.id} class="av-item">
                 <div class="av-media">
                   {video.videoUrl ? (
-                    (() => {
-                      const poster = String(video.thumbnailUrl || '').trim();
-                      const posterCss = poster ? poster.replace(/"/g, '%22') : '';
-                      const bgStyle = posterCss
-                        ? `background-image:url(\"${posterCss}\");background-size:cover;background-position:center;background-repeat:no-repeat;`
-                        : undefined;
-
-                      return (
-                    <video
-                      class="av-video"
-                      src={video.videoUrl}
-                      poster={poster || undefined}
-                      style={bgStyle}
-                      controls
-                      preload={video.thumbnailUrl ? 'none' : 'metadata'}
-                      playsinline
-                      webkit-playsinline
-                      crossorigin={video.videoUrl.includes('.r2.dev') ? 'anonymous' : undefined}
-                    />
-                      );
-                    })()
+                    <div class="av-video-wrap">
+                      <video
+                        class="av-video"
+                        src={video.videoUrl}
+                        controls
+                        preload="none"
+                        playsinline
+                        webkit-playsinline
+                        crossorigin={video.videoUrl.includes('.r2.dev') ? 'anonymous' : undefined}
+                      />
+                      {video.thumbnailUrl && (
+                        <img
+                          class="av-video-poster"
+                          src={video.thumbnailUrl}
+                          alt=""
+                          aria-hidden="true"
+                          loading="lazy"
+                        />
+                      )}
+                    </div>
                   ) : video.thumbnailUrl ? (
                     <img class="av-image" src={video.thumbnailUrl} alt="" loading="lazy" />
                   ) : (
@@ -122,5 +121,15 @@ try {
       })}
     </div>
   </div>
+  <script>
+    // Hide the poster <img> overlay once the video actually starts playing
+    document.querySelectorAll('.av-video-wrap').forEach((wrap) => {
+      const video = wrap.querySelector('video');
+      const poster = wrap.querySelector('.av-video-poster');
+      if (!video || !poster) return;
+      const hide = () => { (poster as HTMLElement).style.display = 'none'; };
+      video.addEventListener('playing', hide, { once: true });
+    });
+  </script>
 </body>
 </html>
