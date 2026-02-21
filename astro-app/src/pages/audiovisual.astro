@@ -53,26 +53,15 @@ try {
               <div key={video.id} class="av-item">
                 <div class="av-media">
                   {video.videoUrl ? (
-                    <div class="av-video-wrap">
-                      <video
-                        class="av-video"
-                        src={video.videoUrl}
-                        controls
-                        preload="none"
-                        playsinline
-                        webkit-playsinline
-                        crossorigin={video.videoUrl.includes('.r2.dev') ? 'anonymous' : undefined}
-                      />
-                      {video.thumbnailUrl && (
-                        <img
-                          class="av-video-poster"
-                          src={video.thumbnailUrl}
-                          alt=""
-                          aria-hidden="true"
-                          loading="lazy"
-                        />
-                      )}
-                    </div>
+                    <video
+                      class="av-video"
+                      src={video.videoUrl}
+                      poster={video.thumbnailUrl || undefined}
+                      controls
+                      preload="metadata"
+                      playsinline
+                      webkit-playsinline
+                    />
                   ) : video.thumbnailUrl ? (
                     <img class="av-image" src={video.thumbnailUrl} alt="" loading="lazy" />
                   ) : (
@@ -121,15 +110,5 @@ try {
       })}
     </div>
   </div>
-  <script>
-    // Hide the poster <img> overlay once the video actually starts playing
-    document.querySelectorAll('.av-video-wrap').forEach((wrap) => {
-      const video = wrap.querySelector('video');
-      const poster = wrap.querySelector('.av-video-poster');
-      if (!video || !poster) return;
-      const hide = () => { (poster as HTMLElement).style.display = 'none'; };
-      video.addEventListener('playing', hide, { once: true });
-    });
-  </script>
 </body>
 </html>
