@@ -29,40 +29,35 @@ export default function CreditsPanel({
   currentSceneIndex = 0,
 }: CreditsPanelProps) {
   const panelRef = useRef<HTMLDivElement | null>(null);
+  const scrollRegionRef = useRef<HTMLDivElement | null>(null);
   const [showBottomFade, setShowBottomFade] = useState(false);
 
   const updateBottomFade = useCallback(() => {
-    const panel = panelRef.current;
-    if (!panel || typeof window === 'undefined') {
-      setShowBottomFade(false);
-      return;
-    }
-
-    const isMobileViewport = window.matchMedia('(max-width: 768px)').matches;
-    if (!isMobileViewport) {
+    const scrollRegion = scrollRegionRef.current;
+    if (!scrollRegion || typeof window === 'undefined') {
       setShowBottomFade(false);
       return;
     }
 
     const threshold = 8;
-    const hasHiddenContentBelow = panel.scrollTop + panel.clientHeight < panel.scrollHeight - threshold;
+    const hasHiddenContentBelow = scrollRegion.scrollTop + scrollRegion.clientHeight < scrollRegion.scrollHeight - threshold;
     setShowBottomFade(hasHiddenContentBelow);
   }, []);
 
   useEffect(() => {
     if (!isVisible) return;
-    const panel = panelRef.current;
-    if (!panel) return;
+    const scrollRegion = scrollRegionRef.current;
+    if (!scrollRegion) return;
 
     const handleViewportChange = () => updateBottomFade();
     const handlePanelScroll = () => updateBottomFade();
 
     updateBottomFade();
-    panel.addEventListener('scroll', handlePanelScroll, { passive: true });
+    scrollRegion.addEventListener('scroll', handlePanelScroll, { passive: true });
     window.addEventListener('resize', handleViewportChange);
 
     return () => {
-      panel.removeEventListener('scroll', handlePanelScroll);
+      scrollRegion.removeEventListener('scroll', handlePanelScroll);
       window.removeEventListener('resize', handleViewportChange);
     };
   }, [isVisible, credits, title, updateBottomFade]);
@@ -83,17 +78,19 @@ export default function CreditsPanel({
       className={`credits-panel visible ${showBottomFade ? 'show-bottom-fade' : ''}`}
       onWheel={handleWheel}
     >
-      <div className="credits-content">
-        <div className="credit-line">
-          <span className="credit-title">{title}</span>
-        </div>
-        
-        {credits && credits.map((credit, index) => (
-          <div key={index} className="credit-line">
-            <span className="credit-role">{credit.role}:</span>
-            <span className="credit-name">{credit.name}</span>
+      <div ref={scrollRegionRef} className="credits-scroll-region">
+        <div className="credits-content">
+          <div className="credit-line">
+            <span className="credit-title">{title}</span>
           </div>
-        ))}
+
+          {credits && credits.map((credit, index) => (
+            <div key={index} className="credit-line">
+              <span className="credit-role">{credit.role}:</span>
+              <span className="credit-name">{credit.name}</span>
+            </div>
+          ))}
+        </div>
       </div>
 
       <div className="credits-bottom-fade" aria-hidden="true" />

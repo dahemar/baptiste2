@@ -118,18 +118,7 @@ export const GET: APIRoute = async (context) => {
         return new Response(JSON.stringify([]), { headers: jsonHeaders });
     }
 
-    const cached = force === '1' ? null : await loadFromCache();
-    if (cached && Array.isArray(cached) && cached.length > 0) {
-      const normalized = normalizeWorksForProxy(cached);
-      try {
-        console.log('[api/theatre-works] returning cached works count=', normalized.length, 'sample=', JSON.stringify(normalized[0]));
-      } catch (e) {
-        console.log('[api/theatre-works] returning cached works count=', normalized.length);
-      }
-        return new Response(JSON.stringify(normalized), { headers: jsonHeaders });
-    }
-
-    console.log('[api/theatre-works] cache empty, attempting fetchFromGoogleSheets() with timeout');
+    console.log('[api/theatre-works] local runtime: attempting fetchFromGoogleSheets() with timeout before cache fallback');
     // Wrap fetch call in timeout promise so it can't hang the handler indefinitely.
     const fetchPromise = fetchFromGoogleSheets();
     const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('fetch timeout')), 8000));
@@ -139,6 +128,17 @@ export const GET: APIRoute = async (context) => {
       const normalized = normalizeWorksForProxy(fresh as any[]);
       await saveToCache(normalized);
       console.log('[api/theatre-works] fetched and cached works count=', normalized.length);
+        return new Response(JSON.stringify(normalized), { headers: jsonHeaders });
+    }
+
+    const cached = force === '1' ? null : await loadFromCache();
+    if (cached && Array.isArray(cached) && cached.length > 0) {
+      const normalized = normalizeWorksForProxy(cached);
+      try {
+        console.log('[api/theatre-works] returning cached works count=', normalized.length, 'sample=', JSON.stringify(normalized[0]));
+      } catch (e) {
+        console.log('[api/theatre-works] returning cached works count=', normalized.length);
+      }
         return new Response(JSON.stringify(normalized), { headers: jsonHeaders });
     }
 

@@ -9,23 +9,33 @@
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   color: #e0e0e0;
-  padding: 2rem;
-  overflow-y: auto;
+  padding: 0;
+  overflow: hidden;
   z-index: 100;
   border-left: 1px solid rgba(255, 255, 255, 0.1);
   transform: translateX(0);
   transition: none;
 }
 
-/* Allow VU meter to stick inside credits panel without being clipped */
+.credits-scroll-region {
+  position: relative;
+  height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  padding: 2rem 2rem calc(11.5rem + 5px);
+  box-sizing: border-box;
+}
+
 .credits-panel .credits-vumeter {
-  position: sticky;
-  top: 1rem;
+  position: absolute;
+  right: 2rem;
+  bottom: 2rem;
   display: flex;
   justify-content: flex-end;
   gap: 0.5rem;
   pointer-events: none;
-  z-index: 1201;
+  z-index: 3;
 }
 
 .credits-panel.hidden {
@@ -39,11 +49,26 @@
 }
 
 .credits-content {
-  padding: 2rem 1.5rem;
+  position: relative;
+  z-index: 1;
+  padding: 0;
 }
 
 .credits-bottom-fade {
-  display: none;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: calc(11.5rem + 5px);
+  background: linear-gradient(to bottom, rgba(42, 42, 42, 0) 0%, rgba(42, 42, 42, 0.92) 34%, rgba(42, 42, 42, 0.995) 56%, rgba(42, 42, 42, 1) 68%, rgba(42, 42, 42, 1) 100%);
+  pointer-events: none;
+  z-index: 2;
+  opacity: 1;
+  transition: opacity 0.18s ease;
+}
+
+.credits-panel:not(.show-bottom-fade) .credits-bottom-fade {
+  opacity: 0;
 }
 
 .credit-line {
@@ -113,20 +138,20 @@
 }
 
 /* Custom scrollbar for credits */
-.credits-panel::-webkit-scrollbar {
+.credits-scroll-region::-webkit-scrollbar {
   width: 4px;
 }
 
-.credits-panel::-webkit-scrollbar-track {
+.credits-scroll-region::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.credits-panel::-webkit-scrollbar-thumb {
+.credits-scroll-region::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.2);
   border-radius: 2px;
 }
 
-.credits-panel::-webkit-scrollbar-thumb:hover {
+.credits-scroll-region::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.4);
 }
 
@@ -135,20 +160,28 @@
     position: relative;
     width: 100%;
     flex: 1;
-    overflow-y: auto;
+    overflow: hidden;
     background-color: #2a2a2a;
-    padding: 1rem;
+    padding: 0;
     box-sizing: border-box;
+  }
+
+  .credits-scroll-region {
+    padding: 1rem 1rem calc(116px + env(safe-area-inset-bottom));
   }
 
   .mobile-fixed-player .credits-panel {
     min-height: 0;
-    overflow-y: auto;
+    overflow: hidden;
     -webkit-overflow-scrolling: touch;
     overscroll-behavior: contain;
-    /* Increased bottom padding by 20px to extend panel lower */
-    padding-bottom: calc(116px + env(safe-area-inset-bottom));
     position: relative;
+  }
+
+  .mobile-fixed-player .credits-scroll-region {
+    height: 100%;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
 
   /* When credits are visible in the mobile fixed player, lift the panel 4px
@@ -160,12 +193,8 @@
 
   .mobile-fixed-player .credits-bottom-fade {
     display: block;
-    position: sticky;
-    left: 0;
-    right: 0;
     bottom: 0;
     height: 82px; /* aumentado 10px para que el degradado empiece más arriba */
-    margin-top: -82px;
     background: linear-gradient(to bottom, rgba(42, 42, 42, 0), rgba(42, 42, 42, 0.96));
     pointer-events: none;
     z-index: 2;
@@ -180,6 +209,8 @@
   .mobile-fixed-player .credits-content {
     position: relative;
     z-index: 1;
+    -webkit-mask-image: none;
+    mask-image: none;
   }
 
   .credits-content {
@@ -198,6 +229,10 @@
     position: absolute;
     bottom: 0;
     padding: 0.35rem 0.5rem;
+  }
+
+  .credits-panel .credits-vumeter {
+    display: none;
   }
 
   .credits-panel.visible {

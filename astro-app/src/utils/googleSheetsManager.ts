@@ -797,7 +797,9 @@ function deriveThumbnailFromVideoUrl(videoUrl: string): string | undefined {
   return undefined;
 }
 
-// Convenience wrapper expected by older code: load theatre works from cache then Google Sheets
+// Convenience wrapper expected by older code.
+// Keep local/dev aligned with the canonical remote source by fetching first,
+// then falling back to cache only if remote loading fails.
 export async function loadTheatreWorksData(options?: { force?: boolean }) {
   const force = !!(options && options.force);
 
@@ -813,17 +815,6 @@ export async function loadTheatreWorksData(options?: { force?: boolean }) {
       console.warn('loadTheatreWorksData: fetchFromGoogleSheets failed (vercel)', (e as any)?.message ?? e);
     }
     return [];
-  }
-
-  if (!force) {
-    try {
-      const cached = await loadFromCache();
-      if (Array.isArray(cached) && cached.length > 0) {
-        return normalizeWorksVideoUrls(cached);
-      }
-    } catch (e) {
-      console.warn('loadTheatreWorksData: loadFromCache failed', (e as any)?.message ?? e);
-    }
   }
 
   try {
@@ -850,7 +841,7 @@ export async function loadTheatreWorksData(options?: { force?: boolean }) {
     const fallback = await loadFromCache();
     if (Array.isArray(fallback)) return normalizeWorksVideoUrls(fallback);
   } catch (e) {
-    // ignore
+    console.warn('loadTheatreWorksData: final loadFromCache failed', (e as any)?.message ?? e);
   }
 
   return [];
