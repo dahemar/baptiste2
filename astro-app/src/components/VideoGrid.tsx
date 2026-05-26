@@ -34,8 +34,12 @@ interface Scene {
   id: string;
   videoUrl: string;
   proxiedVideoUrl?: string;
-  thumbnail?: string;
   duration?: number;
+}
+
+/** Stable cache key: canonical video URL from Sheets (updates when the sheet URL changes). */
+function scenePosterCacheKey(scene?: Scene | null): string {
+  return String(scene?.videoUrl || scene?.proxiedVideoUrl || '').trim();
 }
 
 interface Credit {
@@ -110,34 +114,40 @@ export default function VideoGrid({ works }: VideoGridProps) {
 
   const sceneThumbKey = useCallback((workIdx: number, sceneIdx: number) => `${workIdx}:${sceneIdx}`, []);
 
-  const deriveLocalPosterFromVideo = useCallback((videoUrl?: string) => {
-    const raw = String(videoUrl || '').trim();
-    if (!raw) return undefined;
-    try {
-      const parsed = raw.startsWith('http') ? new URL(raw) : new URL(raw, window.location.origin);
-      const fileName = decodeURIComponent(parsed.pathname.split('/').pop() || '');
-      const base = fileName.replace(/\.[^.]+$/, '');
-      if (!base) return undefined;
-      const normalized = base.replace(/\./g, ' ').trim();
-      if (!normalized) return undefined;
-      return `/assets/images/thumbnails/${normalized}.jpg`;
-    } catch {
-      return undefined;
-    }
-  }, []);
-
-  const resolveScenePoster = useCallback((workIdx: number, sceneIdx: number, scene?: Scene | null) => {
-    const key = sceneThumbKey(workIdx, sceneIdx);
-    if (scene?.thumbnail) return scene.thumbnail;
-    const generated = generatedThumbnails[key];
-    if (generated) return generated;
-    const videoUrl = scene?.proxiedVideoUrl ?? scene?.videoUrl;
-    return deriveLocalPosterFromVideo(videoUrl);
-  }, [generatedThumbnails, deriveLocalPosterFromVideo, sceneThumbKey]);
+  const resolveScenePoster = useCallback((_workIdx: number, _sceneIdx: number, scene?: Scene | null) => {
+    const cacheKey = scenePosterCacheKey(scene);
+    if (!cacheKey) return undefined;
+    return generatedThumbnails[cacheKey];
+  }, [generatedThumbnails]);
 
   useEffect(() => {
     generatedThumbsRef.current = generatedThumbnails;
   }, [generatedThumbnails]);
+
+  // Drop cached posters when a scene's video URL changes (e.g. after a Sheets update).
+  useEffect(() => {
+    const activeKeys = new Set<string>();
+    for (const work of works) {
+      for (const scene of work.scenes || []) {
+        const key = scenePosterCacheKey(scene);
+        if (key) activeKeys.add(key);
+      }
+    }
+
+    setGeneratedThumbnails((prev) => {
+      let changed = false;
+      const next: Record<string, string> = {};
+      for (const [url, poster] of Object.entries(prev)) {
+        if (activeKeys.has(url)) next[url] = poster;
+        else changed = true;
+      }
+      return changed ? next : prev;
+    });
+
+    failedThumbsRef.current = new Set(
+      [...failedThumbsRef.current].filter((url) => activeKeys.has(url))
+    );
+  }, [works]);
 
   const [r2CorsModeEnabled, setR2CorsModeEnabled] = useState(true);
 
@@ -176,33 +186,9 @@ export default function VideoGrid({ works }: VideoGridProps) {
   }, [shouldUseCrossOriginAnonymous]);
 
   useEffect(() => {
-    // Skip expensive thumbnail extraction on mobile — server-derived posters are enough
-    if (isMobile) return;
-
     let cancelled = false;
     const activeExtractions = new Set<string>();
-
-    const hasUsefulPixels = (ctx: CanvasRenderingContext2D, width: number, height: number) => {
-      const sampleW = Math.max(8, Math.floor(width / 12));
-      const sampleH = Math.max(8, Math.floor(height / 12));
-      const x = Math.max(0, Math.floor((width - sampleW) / 2));
-      const y = Math.max(0, Math.floor((height - sampleH) / 2));
-      const data = ctx.getImageData(x, y, sampleW, sampleH).data;
-      let luminanceTotal = 0;
-      let nonTransparent = 0;
-      for (let i = 0; i < data.length; i += 4) {
-        const a = data[i + 3];
-        if (a < 8) continue;
-        nonTransparent++;
-        const r = data[i];
-        const g = data[i + 1];
-        const b = data[i + 2];
-        luminanceTotal += 0.2126 * r + 0.7152 * g + 0.0722 * b;
-      }
-      if (nonTransparent === 0) return false;
-      const avgLum = luminanceTotal / nonTransparent;
-      return avgLum > 14;
-    };
+    const FIRST_FRAME_TIME = 0;
 
     const seekTo = (video: HTMLVideoElement, time: number) =>
       new Promise<void>((resolve, reject) => {
@@ -244,7 +230,7 @@ export default function VideoGrid({ works }: VideoGridProps) {
         } catch {
           // ignore
         }
-        video.preload = 'metadata';
+        video.preload = 'auto';
         video.muted = true;
         video.playsInline = true;
 
@@ -261,39 +247,24 @@ export default function VideoGrid({ works }: VideoGridProps) {
 
         const timeout = window.setTimeout(fail, 12000);
 
-        video.addEventListener('loadedmetadata', async () => {
+        video.addEventListener('loadeddata', async () => {
           try {
             const canvas = document.createElement('canvas');
             canvas.width = video.videoWidth || 1280;
             canvas.height = video.videoHeight || 720;
-            const ctx = canvas.getContext('2d', { willReadFrequently: true });
+            const ctx = canvas.getContext('2d');
             if (!ctx) {
               clearTimeout(timeout);
               fail();
               return;
             }
 
-            const duration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 4;
-            const probes = [0.12, 0.6, 1.25, 2.0]
-              .map((t) => Math.min(Math.max(0.01, t), Math.max(0.01, duration - 0.08)));
-
-            for (const probeTime of probes) {
-              try {
-                await seekTo(video, probeTime);
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                if (!hasUsefulPixels(ctx, canvas.width, canvas.height)) continue;
-                const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
-                clearTimeout(timeout);
-                cleanup();
-                resolve(dataUrl);
-                return;
-              } catch {
-                // try next probe time
-              }
-            }
-
+            await seekTo(video, FIRST_FRAME_TIME);
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
             clearTimeout(timeout);
-            fail();
+            cleanup();
+            resolve(dataUrl);
           } catch {
             clearTimeout(timeout);
             fail();
@@ -316,15 +287,15 @@ export default function VideoGrid({ works }: VideoGridProps) {
       const pushTask = (workIdx: number, sceneIdx: number) => {
         const scene = works[workIdx]?.scenes?.[sceneIdx];
         if (!scene) return;
-        if (scene.thumbnail) return;
-        const key = sceneThumbKey(workIdx, sceneIdx);
-        if (generatedThumbsRef.current[key]) return;
-        if (failedThumbsRef.current.has(key)) return;
-        if (activeExtractions.has(key)) return;
-        if (tasks.some((t) => t.key === key)) return;
+        const cacheKey = scenePosterCacheKey(scene);
+        if (!cacheKey) return;
+        if (generatedThumbsRef.current[cacheKey]) return;
+        if (failedThumbsRef.current.has(cacheKey)) return;
+        if (activeExtractions.has(cacheKey)) return;
+        if (tasks.some((t) => t.key === cacheKey)) return;
         const url = scene.proxiedVideoUrl ?? scene.videoUrl;
         if (!url) return;
-        tasks.push({ key, url });
+        tasks.push({ key: cacheKey, url });
       };
 
       // Prioridad: escena activa y primer video de cada obra (previews iniciales inmediatos)
@@ -337,7 +308,7 @@ export default function VideoGrid({ works }: VideoGridProps) {
         });
       });
 
-      const concurrency = 4;
+      const concurrency = isMobile ? 2 : 4;
       let cursor = 0;
       const workers = new Array(concurrency).fill(0).map(async () => {
         while (!cancelled) {
@@ -366,7 +337,7 @@ export default function VideoGrid({ works }: VideoGridProps) {
     return () => {
       cancelled = true;
     };
-  }, [works, sceneThumbKey, currentWorkIndex, currentSceneIndex, isMobile]);
+  }, [works, sceneThumbKey, currentWorkIndex, currentSceneIndex, isMobile, shouldUseCrossOriginAnonymous]);
 
   useEffect(() => {
     const container = document.querySelector('.viewer-container');

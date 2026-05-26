@@ -74,8 +74,9 @@ function normalizeWorksForProxy<T extends any[]>(works: T): T {
       const computedProxied = allowProxyUrls ? (existingProxied || buildProxiedUrl(rawVideoUrl)) : undefined;
       const canonicalVideoUrl = rawVideoUrl;
 
+      const { thumbnail: _ignoredThumb, ...sceneWithoutThumb } = scene || {};
       return {
-        ...scene,
+        ...sceneWithoutThumb,
         videoUrl: canonicalVideoUrl,
         proxiedVideoUrl: computedProxied,
       };

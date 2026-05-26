@@ -1,7 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import * as fsSync from 'node:fs';
-import crypto from 'node:crypto';
 
 const CACHE_PATH = path.resolve(process.cwd(), '.cache/theatre-works.json');
 
@@ -475,13 +474,12 @@ function parseTheatreWorks(rawValues: string[][]): any[] {
   const works = new Map<string, any>();
   const scenes = new Map<string, any>();
   const videos = new Map<string, string>();
-  const thumbnails = new Map<string, string>();
   const credits = new Map<string, any[]>();
   const sectionHeaders: Record<string, string[]> = {};
 
   let currentSection = '';
   const normalizeHeader = (value: any) => String(value || '').trim().toLowerCase();
-  const sectionNames = ['WORKS', 'SCENES', 'VIDEOS', 'CREDITS', 'THUMBNAILS'];
+  const sectionNames = ['WORKS', 'SCENES', 'VIDEOS', 'CREDITS'];
 
   const getValueByAliases = (section: string, row: string[], aliases: string[], fallbackIndex?: number) => {
     const headers = sectionHeaders[section] || [];
@@ -503,6 +501,9 @@ function parseTheatreWorks(rawValues: string[][]): any[] {
   for (const row of rawValues) {
     if (!row || row.length === 0) continue;
     const first = String(row[0] || '').toUpperCase();
+
+    // Legacy sections: thumbnails are client-generated from video first frame.
+    if (first === 'THUMBNAILS' || first === 'AUDIO') continue;
 
     if (sectionNames.includes(first)) {
       const second = String(row[1] || '').trim();
@@ -555,8 +556,7 @@ function parseTheatreWorks(rawValues: string[][]): any[] {
       }
 
       const inlineVideo = normalizeAssetPath(getValueByAliases('SCENES', row as string[], ['video_url', 'video', 'video_file', 'video_path']));
-      // simplified schema: thumbnail_url removed; client will always generate thumbnails
-      // audio_url removed from simplified schema; audio is embedded in video files
+      // Thumbnails are generated client-side from the first video frame (not from Sheets).
 
       if (sceneId && workId) scenes.set(sceneId, { sceneId, workId, name: sceneName });
       if (sceneId && inlineVideo) videos.set(sceneId, inlineVideo);
@@ -564,10 +564,6 @@ function parseTheatreWorks(rawValues: string[][]): any[] {
       const sceneId = getValueByAliases('VIDEOS', row as string[], ['scene_id', 'scene', 'id_scene'], 2);
       const videoFile = normalizeAssetPath(getValueByAliases('VIDEOS', row as string[], ['video_url', 'video', 'video_file', 'file'], 3));
       if (sceneId && videoFile) videos.set(sceneId, videoFile);
-    } else if (currentSection === 'THUMBNAILS') {
-      const sceneId = getValueByAliases('THUMBNAILS', row as string[], ['scene_id', 'scene', 'id_scene'], 2);
-      const imageFile = normalizeAssetPath(getValueByAliases('THUMBNAILS', row as string[], ['thumbnail_url', 'thumbnail', 'image_url', 'image_file'], 3));
-      if (sceneId && imageFile) thumbnails.set(sceneId, imageFile);
     } else if (currentSection === 'CREDITS') {
       const workId = getValueByAliases('CREDITS', row as string[], ['work_id', 'work_slug', 'work', 'id_work'], 2);
       const role = getValueByAliases('CREDITS', row as string[], ['role', 'credit_role'], 3);
@@ -579,61 +575,10 @@ function parseTheatreWorks(rawValues: string[][]): any[] {
     }
   }
 
-  function findLocalThumbByBaseName(baseName: string): string | undefined {
-    if (!baseName) return undefined;
-    const key = baseName
-      .normalize('NFD').replace(/\p{Diacritic}/gu, '')
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, ' ')
-      .trim()
-      .replace(/\s+/g, ' ');
-
-    const possibleDirs = [
-      path.resolve(process.cwd(), 'public', 'assets', 'images', 'thumbnails'),
-      path.resolve(process.cwd(), 'astro-app', 'public', 'assets', 'images', 'thumbnails'),
-      path.resolve(process.cwd(), '..', 'astro-app', 'public', 'assets', 'images', 'thumbnails')
-    ];
-
-    for (const d of possibleDirs) {
-      try {
-        if (!fsSync.existsSync(d)) continue;
-        const files = fsSync.readdirSync(d);
-        for (const f of files) {
-          const base = f.replace(/\.[^.]+$/, '');
-          const fkey = base
-            .normalize('NFD').replace(/\p{Diacritic}/gu, '')
-            .toLowerCase()
-            .replace(/[^a-z0-9]+/g, ' ')
-            .trim()
-            .replace(/\s+/g, ' ');
-          if (fkey === key) return `/assets/images/thumbnails/${f}`;
-        }
-      } catch (e) {
-        // ignore
-      }
-    }
-    return undefined;
-  }
-
-  function resolveLocalFromThumbUrl(maybeUrl: string): string | undefined {
-    try {
-      const u = new URL(maybeUrl);
-      const base = decodeURIComponent(u.pathname.split('/').pop() || '');
-      const baseNoExt = base.replace(/\.[^.]+$/, '');
-      return findLocalThumbByBaseName(baseNoExt) || undefined;
-    } catch (e) {
-      return undefined;
-    }
-  }
-
   for (const [sceneId, s] of scenes.entries()) {
     const work = works.get(s.workId);
     if (!work) continue;
     const videoUrl = normalizeVideoUrl(videos.get(sceneId) || '');
-
-    // Generate a deterministic local thumbnail path from video URL for instant first render.
-    // This does not depend on thumbnail_url in Sheets.
-    const thumb = deriveThumbnailFromVideoUrl(videoUrl);
 
     // Optional dev-only proxy URL for hosts that block CORS.
     // In Vercel (prod) we always return canonical upstream URLs to avoid streaming large files through Vercel.
@@ -642,7 +587,6 @@ function parseTheatreWorks(rawValues: string[][]): any[] {
       id: `${s.workId}-scene-${work.scenes.length}`,
       videoUrl,
       proxiedVideoUrl,
-      thumbnail: thumb,
     });
   }
 
@@ -692,8 +636,9 @@ function normalizeWorksVideoUrls<T extends any[]>(works: T): T {
       const existingProxiedRaw = typeof scene?.proxiedVideoUrl === 'string' ? scene.proxiedVideoUrl : undefined;
       const existingProxied = existingProxiedRaw ? rewritePossiblyProxiedVideoUrl(existingProxiedRaw) : undefined;
       const proxiedVideoUrl = IS_VERCEL_RUNTIME ? undefined : (existingProxied || toProxiedVideoUrl(rawVideoUrl));
+      const { thumbnail: _ignoredThumb, ...sceneWithoutThumb } = scene || {};
       return {
-        ...scene,
+        ...sceneWithoutThumb,
         videoUrl: rawVideoUrl,
         proxiedVideoUrl,
       };
@@ -704,97 +649,6 @@ function normalizeWorksVideoUrls<T extends any[]>(works: T): T {
       scenes: normalizedScenes,
     };
   }) as T;
-}
-
-function normalizeCandidatesFromBase(base: string): string[] {
-  if (!base) return [];
-  const decoded = decodeURIComponent(base);
-  const nameNoExt = decoded.replace(/\.[^.]+$/, '');
-  const out = new Set<string>();
-  out.add(`${nameNoExt}.jpg`);
-  out.add(`${nameNoExt.replace(/\./g, ' ')}.jpg`);
-  out.add(`${decoded}`);
-  // also try removing diacritics
-  const noDiacritics = nameNoExt.normalize('NFD').replace(/\p{Diacritic}/gu, '');
-  out.add(`${noDiacritics}.jpg`);
-  out.add(`${noDiacritics.replace(/\./g, ' ')}.jpg`);
-  // spaces -> dots variant
-  out.add(`${nameNoExt.replace(/ /g, '.')}.jpg`);
-  return Array.from(out);
-}
-
-function deriveThumbnailFromVideoUrl(videoUrl: string): string | undefined {
-  if (!videoUrl) return undefined;
-  try {
-    // normalize URL and extract base name
-    const urlObj = new URL(videoUrl, 'https://example.org');
-    const pathname = decodeURIComponent(urlObj.pathname || '');
-    const base = pathname.split('/').pop() || '';
-
-    // Build a normalized lookup of actual thumbnail filenames to handle inconsistent naming
-    const possibleDirs = [
-      path.resolve(process.cwd(), 'public', 'assets', 'images', 'thumbnails'),
-      path.resolve(process.cwd(), 'astro-app', 'public', 'assets', 'images', 'thumbnails'),
-      path.resolve(process.cwd(), '..', 'astro-app', 'public', 'assets', 'images', 'thumbnails')
-    ];
-
-    const lookup: Record<string, string> = {};
-    for (const thumbDir of possibleDirs) {
-      try {
-        if (!fsSync.existsSync(thumbDir)) continue;
-        const files = fsSync.readdirSync(thumbDir);
-        for (const f of files) {
-          // drop extension then normalize filename to key: lowercase, remove diacritics, replace non-alphanum with space, collapse spaces
-          const baseName = f.replace(/\.[^.]+$/, '');
-          const key = baseName
-            .normalize('NFD').replace(/\p{Diacritic}/gu, '')
-            .toLowerCase()
-            .replace(/[^a-z0-9]+/g, ' ')
-            .trim()
-            .replace(/\s+/g, ' ');
-          lookup[key] = f;
-        }
-      } catch (e) {
-        // ignore
-      }
-    }
-
-    const probeKeys = (candidateBase: string) => {
-      const key = candidateBase
-        .normalize('NFD').replace(/\p{Diacritic}/gu, '')
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, ' ')
-        .trim()
-        .replace(/\s+/g, ' ');
-      if (lookup[key]) return `/assets/images/thumbnails/${lookup[key]}`;
-      return undefined;
-    };
-
-    // Try probing by derived candidates
-    const candidates = normalizeCandidatesFromBase(base);
-    for (const cand of candidates) {
-      const res = probeKeys(cand.replace(/\.jpg$/i, ''));
-      if (res) return res;
-    }
-
-    // Also probe by the raw base (without ext) and by splitting dots to spaces
-    const rawProbe = probeKeys(base.replace(/\.jpg$/i, '').replace(/\.[^.]+$/, ''));
-    if (rawProbe) return rawProbe;
-
-    // fallback to generated path (may be remote in sheet); try mp4 and hls heuristics
-    const mp4Match = videoUrl.match(/\/([^\/\?#]+)\.mp4(?:[\?#].*)?$/i);
-    if (mp4Match?.[1]) {
-      const gen = `${mp4Match[1]}.jpg`;
-      const genProbe = probeKeys(mp4Match[1]);
-      if (genProbe) return genProbe;
-      return `/assets/images/thumbnails/${gen}`;
-    }
-    const hlsMatch = videoUrl.match(/\/hls\/([^\/]+)\//i);
-    if (hlsMatch?.[1]) return `/assets/images/thumbnails/${hlsMatch[1]}.jpg`;
-  } catch (e) {
-    // ignore and fallback
-  }
-  return undefined;
 }
 
 // Convenience wrapper expected by older code.
@@ -824,18 +678,6 @@ export async function loadTheatreWorksData(options?: { force?: boolean }) {
     console.warn('loadTheatreWorksData: fetchFromGoogleSheets failed', (e as any)?.message ?? e);
   }
 
-  // Background: prefetch thumbnails for any remote thumb entries in cache
-  try {
-    const maybeCached = await loadFromCache();
-    if (Array.isArray(maybeCached) && maybeCached.length > 0) {
-      setTimeout(() => {
-        void prefetchThumbnails(maybeCached);
-      }, 1000);
-    }
-  } catch (e) {
-    // ignore
-  }
-
   // Final fallback to cache (may be empty array)
   try {
     const fallback = await loadFromCache();
@@ -856,51 +698,3 @@ const defaultExport = {
 };
 
 export default defaultExport;
-
-async function prefetchThumbnails(works: any[]) {
-  try {
-    const CACHE_DIR = path.resolve(process.cwd(), '.cache', 'thumbs');
-    await fs.mkdir(CACHE_DIR, { recursive: true });
-    const tasks: string[] = [];
-    for (const w of works) {
-      for (const s of (w.scenes || [])) {
-        const t = s.thumbnail;
-        if (!t) continue;
-        // thumbnails rewritten to /api/thumb/<encoded> for remote URLs
-        if (typeof t === 'string' && t.startsWith('/api/thumb/')) {
-          const enc = t.replace('/api/thumb/', '');
-          let remote: string;
-          try { remote = decodeURIComponent(enc); } catch { remote = enc; }
-          tasks.push(remote);
-        }
-      }
-    }
-
-    const unique = Array.from(new Set(tasks));
-    const CONC = 4;
-    for (let i = 0; i < unique.length; i += CONC) {
-      const batch = unique.slice(i, i + CONC).map(async (remote) => {
-        try {
-          const ext = (path.extname(new URL(remote).pathname) || '').replace(/^\./, '') || 'jpg';
-          const fname = crypto.createHash('sha1').update(remote).digest('hex') + '.' + ext;
-          const filePath = path.join(CACHE_DIR, fname);
-          if (fsSync.existsSync(filePath)) return;
-          const controller = new AbortController();
-          const to = setTimeout(() => controller.abort(), 7000);
-          const res = await fetch(remote, { signal: controller.signal, redirect: 'follow' }).catch(() => null);
-          clearTimeout(to);
-          if (!res || !res.ok) return;
-          const ab = await res.arrayBuffer().catch(() => null);
-          if (!ab) return;
-          await fs.writeFile(filePath + '.tmp', Buffer.from(ab));
-          try { await fs.rename(filePath + '.tmp', filePath); } catch (e) { /* ignore */ }
-        } catch (e) {
-          // ignore individual failures
-        }
-      });
-      await Promise.allSettled(batch);
-    }
-  } catch (e) {
-    // ignore
-  }
-}
