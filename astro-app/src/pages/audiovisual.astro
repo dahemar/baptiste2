@@ -60,11 +60,17 @@ try {
             {project.videos.map((video, videoIdx) => {
               const posterUrl = video.thumbnailUrl || undefined;
               const hasPoster = !!posterUrl;
+              const hasVideo = !!video.videoUrl;
               const eagerPoster = projectIdx < 2 && videoIdx < 2;
+              const mediaClass = [
+                'av-media',
+                hasPoster ? 'av-has-poster' : '',
+                hasVideo ? 'av-has-video' : '',
+              ].filter(Boolean).join(' ');
 
               return (
               <div key={video.id} class="av-item">
-                <div class={`av-media${hasPoster ? ' av-has-poster' : ''}`}>
+                <div class={mediaClass}>
                   {hasPoster && (
                     <img
                       class="av-image"
@@ -89,6 +95,14 @@ try {
                   ) : !hasPoster ? (
                     <div class="av-placeholder" aria-label="placeholder" />
                   ) : null}
+
+                  {hasVideo && (
+                    <button type="button" class="av-play-overlay" aria-label="Play video">
+                      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <path d="M8 5.14v13.72L19 12 8 5.14z" fill="currentColor" />
+                      </svg>
+                    </button>
+                  )}
                 </div>
 
                 {(() => {
@@ -159,12 +173,15 @@ try {
 
           showPoster();
 
-          if (img) {
-            img.addEventListener('click', function (e) {
-              e.preventDefault();
-              video.play().catch(function () {});
-            });
-          }
+          var startPlayback = function (e) {
+            if (e) e.preventDefault();
+            video.play().catch(function () {});
+          };
+
+          if (img) img.addEventListener('click', startPlayback);
+
+          var playBtn = container.querySelector('.av-play-overlay');
+          if (playBtn) playBtn.addEventListener('click', startPlayback);
 
           video.addEventListener('play', showVideo);
           video.addEventListener('pause', function () {
