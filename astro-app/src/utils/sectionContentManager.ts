@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import * as fsSync from 'node:fs';
+import { deriveAutoThumbnailUrl } from './r2Thumbnails';
 
 const IS_VERCEL_RUNTIME = !!process.env.VERCEL;
 const IS_DEV_RUNTIME = process.env.NODE_ENV !== 'production';
@@ -400,13 +401,14 @@ export async function loadAudiovisualData(): Promise<AudiovisualProject[]> {
 
     videoCounter++;
     const id = rowValue(row, ['id', 'ID']) || `${p.id}-v${videoCounter}`;
+    const normalizedVideoUrl = videoUrl || undefined;
     p.videos.push({
       id,
       title: title || undefined,
       credits: credits || undefined,
       year: year || undefined,
-      videoUrl: videoUrl || undefined,
-      thumbnailUrl: thumbnailUrl || undefined,
+      videoUrl: normalizedVideoUrl,
+      thumbnailUrl: thumbnailUrl || deriveAutoThumbnailUrl(normalizedVideoUrl || '') || undefined,
       externalUrl: externalUrl || undefined,
     });
   }

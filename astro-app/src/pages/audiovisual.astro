@@ -57,25 +57,36 @@ try {
               <div class="av-project-title">{project.projectTitle}</div>
             )}
 
-            {project.videos.map((video) => (
+            {project.videos.map((video, videoIdx) => {
+              const posterUrl = video.thumbnailUrl || undefined;
+              const hasPoster = !!posterUrl;
+              const eagerPoster = projectIdx < 2 && videoIdx < 2;
+
+              return (
               <div key={video.id} class="av-item">
-                <div class="av-media">
-                  {/* Render both image and video when a thumbnail exists so mobile Safari always shows a visible preview. */}
-                  {video.thumbnailUrl && (
-                    <img class="av-image" src={video.thumbnailUrl} alt="" loading="lazy" />
+                <div class={`av-media${hasPoster ? ' av-has-poster' : ''}`}>
+                  {hasPoster && (
+                    <img
+                      class="av-image"
+                      src={posterUrl}
+                      alt=""
+                      loading={eagerPoster ? 'eager' : 'lazy'}
+                      decoding="async"
+                      fetchpriority={eagerPoster ? 'high' : 'auto'}
+                    />
                   )}
 
                   {video.videoUrl ? (
                     <video
                       class="av-video"
                       src={video.videoUrl}
-                      poster={video.thumbnailUrl || undefined}
+                      poster={posterUrl}
                       controls
-                      preload="metadata"
+                      preload={hasPoster ? 'none' : 'metadata'}
                       playsinline
                       webkit-playsinline
                     />
-                  ) : !video.thumbnailUrl ? (
+                  ) : !hasPoster ? (
                     <div class="av-placeholder" aria-label="placeholder" />
                   ) : null}
                 </div>
@@ -107,7 +118,8 @@ try {
                   );
                 })()}
               </div>
-            ))}
+            );
+            })}
 
             {hasFooter && (
               <div class="av-meta av-group-meta">
@@ -134,27 +146,31 @@ try {
         document.querySelectorAll('.av-media').forEach(function (container) {
           var video = container.querySelector('video');
           var img = container.querySelector('img.av-image');
-          if (!video || !img) return;
+          if (!video) return;
 
-          // Ensure image is visible by default
-          img.style.display = '';
+          var showPoster = function () {
+            container.classList.remove('av-playing');
+            if (img) img.style.display = '';
+          };
+          var showVideo = function () {
+            container.classList.add('av-playing');
+            if (img) img.style.display = 'none';
+          };
 
-          img.addEventListener('click', function (e) {
-            e.preventDefault();
-            // user gesture -> should allow play
-            video.play().catch(function () {});
-          });
+          showPoster();
 
-          video.addEventListener('play', function () {
-            img.style.display = 'none';
-          });
+          if (img) {
+            img.addEventListener('click', function (e) {
+              e.preventDefault();
+              video.play().catch(function () {});
+            });
+          }
+
+          video.addEventListener('play', showVideo);
           video.addEventListener('pause', function () {
-            // show image again when paused or ended
-            if (video.currentTime === 0 || video.ended) img.style.display = '';
+            if (video.currentTime === 0 || video.ended) showPoster();
           });
-          video.addEventListener('ended', function () {
-            img.style.display = '';
-          });
+          video.addEventListener('ended', showPoster);
         });
       });
     } catch (e) {

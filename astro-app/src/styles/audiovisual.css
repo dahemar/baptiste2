@@ -66,8 +66,19 @@
   display: block;
 }
 
+.av-image {
+  z-index: 2;
+}
+
 .av-video {
+  z-index: 1;
   background: #111;
+}
+
+/* Keep poster image visible on mobile until playback starts (Safari paints video layer on top). */
+.av-media.av-has-poster:not(.av-playing) .av-video {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .av-placeholder {

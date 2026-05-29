@@ -1,3 +1,5 @@
+import { deriveAutoThumbnailUrl } from './r2Thumbnails';
+
 // In Vercel runtime we want the canonical source of truth to be Google Sheets.
 // Avoid shipping/using stale on-disk caches or local CSV fallbacks.
 const IS_VERCEL_RUNTIME = !!process.env.VERCEL;
@@ -469,21 +471,6 @@ function normalizeVideoUrl(url: string): string {
   const rewritten = rewritePossiblyProxiedVideoUrl(url);
   if (!rewritten.startsWith('http') && !rewritten.startsWith('/')) return `/${rewritten}`;
   return rewritten;
-}
-
-function deriveAutoThumbnailUrl(videoUrl: string): string | undefined {
-  if (!videoUrl) return undefined;
-  try {
-    const u = new URL(videoUrl);
-    if (!u.hostname.endsWith('.r2.dev')) return undefined;
-    if (!/\.mp4$/i.test(u.pathname)) return undefined;
-    u.pathname = u.pathname.replace(/\.mp4$/i, '.jpg');
-    u.search = '';
-    u.hash = '';
-    return u.toString();
-  } catch {
-    return undefined;
-  }
 }
 
 function shouldProxyHost(hostname: string): boolean {
