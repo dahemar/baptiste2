@@ -23,9 +23,12 @@ const normalizeKey = (path: string) => {
   return path.split('/').pop() || '';
 };
 
+const matchedKeys = new Set<string>();
+
 const entries = Object.entries(images).map(([path, src]) => {
   const key = normalizeKey(path);
   const found = releases.find(r => r.coverKey === key);
+  if (found) matchedKeys.add(found.id);
   return {
     key,
     src: typeof src === 'string' ? src : '',
@@ -33,12 +36,19 @@ const entries = Object.entries(images).map(([path, src]) => {
     format: found?.format || '',
     year: found?.year || '',
     type: found?.type || 'other',
-    url: found?.url || allReleasesUrl
+    url: found?.url || allReleasesUrl,
+    id: found?.id || '',
   };
 });
 
 const externalOnlyEntries = releases
-  .filter((item) => !!item.coverUrl && !entries.some((entry) => entry.key === item.coverKey))
+  .filter((item) => {
+    if (!item.coverUrl) return false;
+    const alreadyMatched = entries.some((entry) => entry.key === item.coverKey);
+    if (alreadyMatched) return false;
+    matchedKeys.add(item.id);
+    return true;
+  })
   .map((item) => ({
     key: item.coverKey || item.id,
     src: item.coverUrl || '',
@@ -47,13 +57,30 @@ const externalOnlyEntries = releases
     year: item.year,
     type: item.type || 'other',
     url: item.url || allReleasesUrl,
+    id: item.id,
   }));
 
-const mergedEntries = [...entries, ...externalOnlyEntries];
+const noImageEntries = releases
+  .filter((item) => !matchedKeys.has(item.id))
+  .map((item) => ({
+    key: item.coverKey || item.id,
+    src: '',
+    title: item.title,
+    format: item.format,
+    year: item.year,
+    type: item.type || 'other',
+    url: item.url || allReleasesUrl,
+    id: item.id,
+  }));
 
-const albums = mergedEntries.filter(item => item.type === 'album').sort((a, b) => Number(a.year) - Number(b.year));
-const eps = mergedEntries.filter(item => item.type === 'ep').sort((a, b) => Number(a.year) - Number(b.year));
-const compilations = mergedEntries.filter(item => item.type === 'compilation').sort((a, b) => Number(a.year) - Number(b.year));
+const mergedEntries = [...entries, ...externalOnlyEntries, ...noImageEntries];
+
+const sortNewestFirst = (a: { year: string; id: string }, b: { year: string; id: string }) =>
+  Number(b.year) - Number(a.year) || Number(b.id) - Number(a.id);
+
+const albums = mergedEntries.filter(item => item.type === 'album').sort(sortNewestFirst);
+const eps = mergedEntries.filter(item => item.type === 'ep').sort(sortNewestFirst);
+const compilations = mergedEntries.filter(item => item.type === 'compilation').sort(sortNewestFirst);
 ---
 
 <!DOCTYPE html>
@@ -68,7 +95,7 @@ const compilations = mergedEntries.filter(item => item.type === 'compilation').s
   <nav class="main-nav">
     <div class="nav-container">
       <div class="nav-links">
-        <a href="/" class="nav-link home-link" aria-label="theatre"><span class="desktop-label">music for theatre</span><span class="mobile-label">theatre</span></a>
+        <a href="/" class="nav-link home-link" aria-label="theatre"><span class="desktop-label">sound for theatre</span><span class="mobile-label">theatre</span></a>
         <a href="/music" class="nav-link active">music</a>
         <a href="/audiovisual" class="nav-link">audiovisual</a>
         <a href="/contact" class="nav-link">contact</a>
@@ -90,7 +117,7 @@ const compilations = mergedEntries.filter(item => item.type === 'compilation').s
       <div class="music-section">
         <h2 class="section-title">albums</h2>
         <div class="music-grid">
-          {albums.map(item => (
+            {albums.map(item => (
             <a
               key={item.key}
               class="music-card"
@@ -100,7 +127,11 @@ const compilations = mergedEntries.filter(item => item.type === 'compilation').s
               title={item.title}
             >
               <div class="music-cover">
-                <img src={item.src} alt={item.title} loading="lazy" />
+                {item.src ? (
+                  <img src={item.src} alt={item.title} loading="lazy" />
+                ) : (
+                  <div class="music-cover-placeholder">{item.title.charAt(0)}</div>
+                )}
               </div>
               <div class="music-meta">
                 <div class="music-name">{item.title}</div>
@@ -127,7 +158,11 @@ const compilations = mergedEntries.filter(item => item.type === 'compilation').s
               title={item.title}
             >
               <div class="music-cover">
-                <img src={item.src} alt={item.title} loading="lazy" />
+                {item.src ? (
+                  <img src={item.src} alt={item.title} loading="lazy" />
+                ) : (
+                  <div class="music-cover-placeholder">{item.title.charAt(0)}</div>
+                )}
               </div>
               <div class="music-meta">
                 <div class="music-name">{item.title}</div>
@@ -154,7 +189,11 @@ const compilations = mergedEntries.filter(item => item.type === 'compilation').s
               title={item.title}
             >
               <div class="music-cover">
-                <img src={item.src} alt={item.title} loading="lazy" />
+                {item.src ? (
+                  <img src={item.src} alt={item.title} loading="lazy" />
+                ) : (
+                  <div class="music-cover-placeholder">{item.title.charAt(0)}</div>
+                )}
               </div>
               <div class="music-meta">
                 <div class="music-name">{item.title}</div>

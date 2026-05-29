@@ -72,14 +72,14 @@
 }
 
 .credit-line {
-  margin-bottom: 1rem;
-  line-height: 1.4;
+  margin-bottom: 0.5rem;
+  line-height: 1.3;
 }
 
 .credit-title {
   font-weight: 500;
   letter-spacing: -0.01em;
-  font-size: 1.1rem;
+  font-size: 0.9rem;
   color: #ffffff;
 }
 
@@ -127,14 +127,14 @@
 .credit-role {
   font-weight: 300;
   color: #888;
-  font-size: 0.95rem;
+  font-size: 0.8rem;
 }
 
 .credit-name {
   font-weight: 400;
   color: #e0e0e0;
   margin-left: 0.5rem;
-  font-size: 0.95rem;
+  font-size: 0.8rem;
 }
 
 /* Custom scrollbar for credits */
@@ -240,7 +240,7 @@
   }
 
   .credit-line {
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.3rem;
   }
 
   .credit-title {

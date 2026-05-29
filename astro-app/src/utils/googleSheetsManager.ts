@@ -1,9 +1,3 @@
-import fs from 'node:fs/promises';
-import path from 'node:path';
-import * as fsSync from 'node:fs';
-
-const CACHE_PATH = path.resolve(process.cwd(), '.cache/theatre-works.json');
-
 // In Vercel runtime we want the canonical source of truth to be Google Sheets.
 // Avoid shipping/using stale on-disk caches or local CSV fallbacks.
 const IS_VERCEL_RUNTIME = !!process.env.VERCEL;
@@ -42,29 +36,6 @@ function rewritePossiblyProxiedVideoUrl(url: string): string {
     return url;
   }
   return rewriteR2PublicUrl(url);
-}
-
-export async function loadFromCache() {
-  if (IS_VERCEL_RUNTIME) return null;
-  try {
-    const raw = await fs.readFile(CACHE_PATH, 'utf-8');
-    const parsed = JSON.parse(raw);
-    // Support two cache shapes:
-    // - Array of works
-    // - Object { fetchedAt, count, works }
-    if (Array.isArray(parsed)) return parsed;
-    if (parsed && Array.isArray(parsed.works)) return parsed.works;
-    // If it's some other object, return it as-is (fallback)
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-
-export async function saveToCache(data: unknown) {
-  if (IS_VERCEL_RUNTIME) return;
-  await fs.mkdir(path.dirname(CACHE_PATH), { recursive: true });
-  await fs.writeFile(CACHE_PATH, JSON.stringify(data, null, 2), 'utf-8');
 }
 
 // In-memory cache for this module
@@ -173,72 +144,8 @@ async function fetchTheatreDataViaGviz(sheetId: string): Promise<any[] | null> {
   }
 }
 
-async function readCsvRows(filePath: string): Promise<string[][]> {
-  const csvContent = await fs.readFile(filePath, 'utf-8');
-  return csvContent
-    .split('\n')
-    .map(line => line.replace(/\r$/, ''))
-    .filter(line => line.trim().length > 0)
-    .map(line => parseCsvLine(line));
-}
-
-async function loadSimplifiedTheatreRowsFromCsv(): Promise<string[][] | null> {
-  const dataDirs = [
-    path.resolve(process.cwd(), 'data'),
-    path.resolve(process.cwd(), 'astro-app', 'data'),
-    path.resolve(process.cwd(), '..', 'astro-app', 'data'),
-  ];
-
-  for (const dir of dataDirs) {
-    const worksPath = path.join(dir, 'theatre-works-works.csv');
-    const scenesPath = path.join(dir, 'theatre-works-scenes.csv');
-    const creditsPath = path.join(dir, 'theatre-works-credits.csv');
-
-    if (!fsSync.existsSync(worksPath) || !fsSync.existsSync(scenesPath)) {
-      continue;
-    }
-
-    try {
-      const combined: string[][] = [];
-      const worksRows = await readCsvRows(worksPath);
-      if (worksRows.length > 0) {
-        combined.push(['WORKS', ...(worksRows[0] || [])]);
-        for (const row of worksRows.slice(1)) combined.push(['WORKS', ...row]);
-      }
-
-      const scenesRows = await readCsvRows(scenesPath);
-      if (scenesRows.length > 0) {
-        combined.push(['SCENES', ...(scenesRows[0] || [])]);
-        for (const row of scenesRows.slice(1)) combined.push(['SCENES', ...row]);
-      }
-
-      if (fsSync.existsSync(creditsPath)) {
-        const creditsRows = await readCsvRows(creditsPath);
-        if (creditsRows.length > 0) {
-          combined.push(['CREDITS', ...(creditsRows[0] || [])]);
-          for (const row of creditsRows.slice(1)) combined.push(['CREDITS', ...row]);
-        }
-      }
-
-      if (combined.length > 0) {
-        console.log(`fetchFromGoogleSheets: loaded simplified theatre CSV set from ${dir}`);
-        return combined;
-      }
-    } catch (e) {
-      console.warn(`fetchFromGoogleSheets: failed simplified CSV set in ${dir}`, (e as any)?.message ?? e);
-    }
-  }
-
-  return null;
-}
-
 export async function fetchFromGoogleSheets(): Promise<any[]> {
   const CACHE_KEY = 'theatreWorks';
-  // Return cached value if present
-  if (!IS_VERCEL_RUNTIME && cache.has(CACHE_KEY)) {
-    const cached = cache.get(CACHE_KEY);
-    if (Array.isArray(cached) && cached.length > 0) return cached;
-  }
 
   let rows: any[] | null = null;
 
@@ -373,42 +280,8 @@ export async function fetchFromGoogleSheets(): Promise<any[]> {
     }
   }
 
-  // 2b) Fallback: try loading from local CSV file if Google Sheets returned nothing.
-  // Disabled on Vercel runtime to ensure data is always sourced dynamically from Google Sheets.
-  if (!IS_VERCEL_RUNTIME && (!Array.isArray(rows) || rows.length === 0)) {
-    console.log('fetchFromGoogleSheets: trying local CSV fallback');
-
-    rows = await loadSimplifiedTheatreRowsFromCsv();
-
-    const csvPaths = [
-      path.resolve(process.cwd(), 'data', 'theatre-works.csv'),
-      path.resolve(process.cwd(), 'data', 'theatre-works.csv.backup'),
-      path.resolve(process.cwd(), 'astro-app', 'data', 'theatre-works.csv'),
-      path.resolve(process.cwd(), 'astro-app', 'data', 'theatre-works.csv.backup'),
-      path.resolve(process.cwd(), '..', 'astro-app', 'data', 'theatre-works.csv'),
-      path.resolve(process.cwd(), '..', 'astro-app', 'data', 'theatre-works.csv.backup'),
-      path.resolve(process.cwd(), 'baptiste-theatre_works-updated.csv'),
-      path.resolve(process.cwd(), 'baptiste-theatre_works-releases.csv'),
-    ];
-    for (const csvPath of csvPaths) {
-      if (Array.isArray(rows) && rows.length > 0) break;
-      try {
-        if (!fsSync.existsSync(csvPath)) continue;
-        const csvRows = await readCsvRows(csvPath);
-        if (csvRows.length > 0) {
-          rows = csvRows;
-          console.log(`fetchFromGoogleSheets: loaded ${rows.length} rows from CSV fallback: ${csvPath}`);
-          break;
-        }
-      } catch (e) {
-        console.warn(`fetchFromGoogleSheets: failed to read CSV ${csvPath}`, (e as any)?.message ?? e);
-      }
-    }
-  }
-
   if (!Array.isArray(rows) || rows.length === 0) {
     console.warn('fetchFromGoogleSheets: no rows obtained from any source');
-    try { await saveToCache([]); } catch {}
     return [];
   }
 
@@ -424,11 +297,6 @@ export async function fetchFromGoogleSheets(): Promise<any[]> {
   if (Array.isArray(rows) && Array.isArray(rows[0]) && rows.some(r => Array.isArray(r) && String(r[0] || '').toUpperCase() === 'WORKS')) {
     try {
       parsed = parseTheatreWorks(rows as string[][]);
-      // persist and return early (disabled on Vercel runtime)
-      if (!IS_VERCEL_RUNTIME) {
-        cache.set(CACHE_KEY, parsed);
-        try { await saveToCache(parsed); } catch (e) { console.warn('fetchFromGoogleSheets: saveToCache failed', e); }
-      }
       return parsed;
     } catch (e) {
       console.warn('fetchFromGoogleSheets: parseTheatreWorks failed, falling back', (e as any)?.message ?? e);
@@ -455,12 +323,6 @@ export async function fetchFromGoogleSheets(): Promise<any[]> {
       }
       return obj;
     });
-  }
-
-  // 4) Cache and persist (disabled on Vercel runtime)
-  if (!IS_VERCEL_RUNTIME) {
-    cache.set(CACHE_KEY, parsed);
-    try { await saveToCache(parsed); } catch (e) { console.warn('fetchFromGoogleSheets: saveToCache failed', e); }
   }
 
   return parsed;
@@ -587,6 +449,7 @@ function parseTheatreWorks(rawValues: string[][]): any[] {
       id: `${s.workId}-scene-${work.scenes.length}`,
       videoUrl,
       proxiedVideoUrl,
+      thumbnail: deriveAutoThumbnailUrl(videoUrl),
     });
   }
 
@@ -606,6 +469,21 @@ function normalizeVideoUrl(url: string): string {
   const rewritten = rewritePossiblyProxiedVideoUrl(url);
   if (!rewritten.startsWith('http') && !rewritten.startsWith('/')) return `/${rewritten}`;
   return rewritten;
+}
+
+function deriveAutoThumbnailUrl(videoUrl: string): string | undefined {
+  if (!videoUrl) return undefined;
+  try {
+    const u = new URL(videoUrl);
+    if (!u.hostname.endsWith('.r2.dev')) return undefined;
+    if (!/\.mp4$/i.test(u.pathname)) return undefined;
+    u.pathname = u.pathname.replace(/\.mp4$/i, '.jpg');
+    u.search = '';
+    u.hash = '';
+    return u.toString();
+  } catch {
+    return undefined;
+  }
 }
 
 function shouldProxyHost(hostname: string): boolean {
@@ -641,6 +519,7 @@ function normalizeWorksVideoUrls<T extends any[]>(works: T): T {
         ...sceneWithoutThumb,
         videoUrl: rawVideoUrl,
         proxiedVideoUrl,
+        thumbnail: deriveAutoThumbnailUrl(rawVideoUrl),
       };
     });
 
@@ -678,21 +557,11 @@ export async function loadTheatreWorksData(options?: { force?: boolean }) {
     console.warn('loadTheatreWorksData: fetchFromGoogleSheets failed', (e as any)?.message ?? e);
   }
 
-  // Final fallback to cache (may be empty array)
-  try {
-    const fallback = await loadFromCache();
-    if (Array.isArray(fallback)) return normalizeWorksVideoUrls(fallback);
-  } catch (e) {
-    console.warn('loadTheatreWorksData: final loadFromCache failed', (e as any)?.message ?? e);
-  }
-
   return [];
 }
 
 const defaultExport = {
   loadTheatreWorksData,
-  loadFromCache,
-  saveToCache,
   fetchFromGoogleSheets,
   clearMemoryCache,
 };

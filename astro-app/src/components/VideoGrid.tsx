@@ -34,6 +34,7 @@ interface Scene {
   id: string;
   videoUrl: string;
   proxiedVideoUrl?: string;
+  thumbnail?: string;
   duration?: number;
 }
 
@@ -76,8 +77,10 @@ export default function VideoGrid({ works }: VideoGridProps) {
   const [showSceneArrows, setShowSceneArrows] = useState(false);
   const [mobilePosterOverlay, setMobilePosterOverlay] = useState<{ visible: boolean; url?: string }>({ visible: false });
   const [generatedThumbnails, setGeneratedThumbnails] = useState<Record<string, string>>({});
+  const [failedPosterUrls, setFailedPosterUrls] = useState<Set<string>>(() => new Set());
   const generatedThumbsRef = useRef<Record<string, string>>({});
   const failedThumbsRef = useRef<Set<string>>(new Set());
+  const inFlightThumbsRef = useRef<Set<string>>(new Set());
   const arrowsTimerRef = useRef<number | null>(null);
   // Generation counter to cancel stale playVideo operations
   const playGenRef = useRef(0);
@@ -112,13 +115,12 @@ export default function VideoGrid({ works }: VideoGridProps) {
   // Credits visibility - only show when playing
   const creditsVisible = isPlaying;
 
-  const sceneThumbKey = useCallback((workIdx: number, sceneIdx: number) => `${workIdx}:${sceneIdx}`, []);
-
   const resolveScenePoster = useCallback((_workIdx: number, _sceneIdx: number, scene?: Scene | null) => {
+    if (scene?.thumbnail && !failedPosterUrls.has(scene.thumbnail)) return scene.thumbnail;
     const cacheKey = scenePosterCacheKey(scene);
     if (!cacheKey) return undefined;
     return generatedThumbnails[cacheKey];
-  }, [generatedThumbnails]);
+  }, [failedPosterUrls, generatedThumbnails]);
 
   useEffect(() => {
     generatedThumbsRef.current = generatedThumbnails;
@@ -150,6 +152,12 @@ export default function VideoGrid({ works }: VideoGridProps) {
   }, [works]);
 
   const [r2CorsModeEnabled, setR2CorsModeEnabled] = useState(true);
+
+  useEffect(() => {
+    if (!r2CorsModeEnabled) {
+      failedThumbsRef.current.clear();
+    }
+  }, [r2CorsModeEnabled]);
 
   const isR2Url = useCallback((maybeUrl?: string | null) => {
     if (!maybeUrl) return false;
@@ -187,45 +195,48 @@ export default function VideoGrid({ works }: VideoGridProps) {
 
   useEffect(() => {
     let cancelled = false;
-    const activeExtractions = new Set<string>();
-    const FIRST_FRAME_TIME = 0;
+    const retryTimers: number[] = [];
+    const EXTRACT_TIMEOUT = 8000;
+    const THUMB_MAX_WIDTH = 1280;
+    const JPEG_QUALITY = 0.92;
+    const isDev = !!(import.meta as any).env?.DEV;
 
-    const seekTo = (video: HTMLVideoElement, time: number) =>
-      new Promise<void>((resolve, reject) => {
-        const onSeeked = () => {
-          cleanup();
-          resolve();
-        };
-        const onError = () => {
-          cleanup();
-          reject(new Error('seek failed'));
-        };
-        const cleanup = () => {
-          video.removeEventListener('seeked', onSeeked);
-          video.removeEventListener('error', onError);
-        };
-        video.addEventListener('seeked', onSeeked, { once: true });
-        video.addEventListener('error', onError, { once: true });
-        try {
-          video.currentTime = time;
-        } catch {
-          cleanup();
-          reject(new Error('invalid seek time'));
-        }
-      });
+    const extractDataUrlFromVideo = (video: HTMLVideoElement): string | null => {
+      try {
+        const vw = video.videoWidth || 320;
+        const vh = video.videoHeight || 180;
+        const scale = Math.min(1, THUMB_MAX_WIDTH / vw);
+        const cw = Math.max(1, Math.round(vw * scale));
+        const ch = Math.max(1, Math.round(vh * scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = cw;
+        canvas.height = ch;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return null;
+        ctx.drawImage(video, 0, 0, cw, ch);
+        return canvas.toDataURL('image/jpeg', JPEG_QUALITY);
+      } catch {
+        return null;
+      }
+    };
 
-    const extractFrame = async (videoUrl: string): Promise<string | null> => {
-      return await new Promise((resolve) => {
+    const extractFrameDirect = (videoUrl: string): Promise<string | null> => {
+      return new Promise((resolve) => {
         const video = document.createElement('video');
+        video.style.position = 'fixed';
+        video.style.left = '-9999px';
+        video.style.width = '1px';
+        video.style.height = '1px';
+        document.body.appendChild(video);
+        let isCorsAttempt = false;
         try {
           const u = new URL(String(videoUrl || ''), window.location.href);
           if (u.origin !== window.location.origin) {
-            // Only attempt cross-origin extraction when CORS mode is enabled and this is R2.
-            if (!shouldUseCrossOriginAnonymous(videoUrl)) {
-              resolve(null);
-              return;
+            // Extraction should keep trying crossOrigin for R2 even if playback CORS mode was disabled.
+            if (isR2Url(videoUrl)) {
+              video.crossOrigin = 'anonymous';
+              isCorsAttempt = true;
             }
-            video.crossOrigin = 'anonymous';
           }
         } catch {
           // ignore
@@ -234,51 +245,84 @@ export default function VideoGrid({ works }: VideoGridProps) {
         video.muted = true;
         video.playsInline = true;
 
-        const cleanup = () => {
+        const finish = (result: string | null) => {
           video.pause();
           video.removeAttribute('src');
           video.load();
+          video.remove();
+          resolve(result);
         };
 
-        const fail = () => {
-          cleanup();
-          resolve(null);
-        };
-
-        const timeout = window.setTimeout(fail, 12000);
-
-        video.addEventListener('loadeddata', async () => {
-          try {
-            const canvas = document.createElement('canvas');
-            canvas.width = video.videoWidth || 1280;
-            canvas.height = video.videoHeight || 720;
-            const ctx = canvas.getContext('2d');
-            if (!ctx) {
-              clearTimeout(timeout);
-              fail();
-              return;
-            }
-
-            await seekTo(video, FIRST_FRAME_TIME);
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
-            clearTimeout(timeout);
-            cleanup();
-            resolve(dataUrl);
-          } catch {
-            clearTimeout(timeout);
-            fail();
-          }
+        video.addEventListener('loadeddata', () => {
+          const du = extractDataUrlFromVideo(video);
+          finish(du);
         }, { once: true });
 
         video.addEventListener('error', () => {
-          clearTimeout(timeout);
-          fail();
+          finish(isCorsAttempt ? '__cors_failure__' : null);
         }, { once: true });
+
+        const timer = window.setTimeout(() => {
+          finish(isCorsAttempt ? '__cors_failure__' : null);
+        }, EXTRACT_TIMEOUT);
+
+        video.addEventListener('loadeddata', () => clearTimeout(timer), { once: true });
+        video.addEventListener('error', () => clearTimeout(timer), { once: true });
 
         video.src = videoUrl;
         video.load();
       });
+    };
+
+    // DEV-only fallback: proxy video through same-origin endpoint for robust canvas extraction.
+    const proxyCache: Map<string, string> = (window as any).__thumbProxyCache__ || new Map();
+    (window as any).__thumbProxyCache__ = proxyCache;
+
+    const getDevProxyId = async (r2Url: string): Promise<string | null> => {
+      const cached = proxyCache.get(r2Url);
+      if (cached) return cached;
+      try {
+        const res = await fetch('/api/proxy/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: r2Url }),
+        });
+        if (!res.ok) return null;
+        const body = await res.json().catch(() => ({} as any));
+        const id = String(body?.id || '');
+        if (!id) return null;
+        proxyCache.set(r2Url, id);
+        return id;
+      } catch {
+        return null;
+      }
+    };
+
+    const extractFrameViaDevProxy = async (videoUrl: string): Promise<string | null> => {
+      const id = await getDevProxyId(videoUrl);
+      if (!id) return null;
+      return await extractFrameDirect(`/api/proxy/serve?id=${encodeURIComponent(id)}`);
+    };
+
+    const extractWithRetry = async (videoUrl: string): Promise<string | null | '__cors_failure__'> => {
+      const first = await extractFrameDirect(videoUrl);
+      if (first) return first;
+      if (first === '__cors_failure__') {
+        if (isDev) {
+          const viaProxy = await extractFrameViaDevProxy(videoUrl);
+          if (viaProxy) return viaProxy;
+        }
+        return '__cors_failure__';
+      }
+      // transient network/decoder hiccup retry
+      await new Promise((r) => setTimeout(r, 220));
+      const second = await extractFrameDirect(videoUrl);
+      if (second) return second;
+      if (second === '__cors_failure__' && isDev) {
+        const viaProxy = await extractFrameViaDevProxy(videoUrl);
+        if (viaProxy) return viaProxy;
+      }
+      return second;
     };
 
     const run = async () => {
@@ -287,36 +331,60 @@ export default function VideoGrid({ works }: VideoGridProps) {
       const pushTask = (workIdx: number, sceneIdx: number) => {
         const scene = works[workIdx]?.scenes?.[sceneIdx];
         if (!scene) return;
+        if (scene.thumbnail && !failedPosterUrls.has(scene.thumbnail)) return;
         const cacheKey = scenePosterCacheKey(scene);
         if (!cacheKey) return;
         if (generatedThumbsRef.current[cacheKey]) return;
         if (failedThumbsRef.current.has(cacheKey)) return;
-        if (activeExtractions.has(cacheKey)) return;
+        if (inFlightThumbsRef.current.has(cacheKey)) return;
         if (tasks.some((t) => t.key === cacheKey)) return;
         const url = scene.proxiedVideoUrl ?? scene.videoUrl;
         if (!url) return;
         tasks.push({ key: cacheKey, url });
       };
 
-      // Prioridad: escena activa y primer video de cada obra (previews iniciales inmediatos)
-      pushTask(currentWorkIndex, currentSceneIndex);
-      works.forEach((_, workIdx) => pushTask(workIdx, 0));
+      // Extract only nearby/visible content; avoid global bursts.
+      if (isMobile && !isPlaying) {
+        works.forEach((_, workIdx) => pushTask(workIdx, 0));
+      }
+      if (!isMobile && !isPlaying) {
+        works.forEach((_, workIdx) => pushTask(workIdx, 0));
+        const currentScenes = (works[currentWorkIndex]?.scenes || []).slice(0, 12);
+        currentScenes.forEach((_, sceneIdx) => pushTask(currentWorkIndex, sceneIdx));
+      }
+      if (isPlaying) {
+        pushTask(currentWorkIndex, currentSceneIndex);
+        const count = works[currentWorkIndex]?.scenes?.length || 0;
+        if (count > 1) {
+          const prev = (currentSceneIndex - 1 + count) % count;
+          const next = (currentSceneIndex + 1) % count;
+          pushTask(currentWorkIndex, prev);
+          pushTask(currentWorkIndex, next);
+        }
+      }
+      if (hoveredScene && !isMobile) {
+        pushTask(hoveredScene.workIndex, hoveredScene.sceneIndex);
+      }
 
-      works.forEach((work, workIdx) => {
-        (work.scenes || []).forEach((scene, sceneIdx) => {
-          pushTask(workIdx, sceneIdx);
-        });
-      });
-
-      const concurrency = isMobile ? 2 : 4;
+      const concurrency = isMobile ? 2 : 3;
       let cursor = 0;
       const workers = new Array(concurrency).fill(0).map(async () => {
         while (!cancelled) {
           const task = tasks[cursor++];
           if (!task) break;
-          activeExtractions.add(task.key);
-          const dataUrl = await extractFrame(task.url);
-          activeExtractions.delete(task.key);
+          inFlightThumbsRef.current.add(task.key);
+
+          let dataUrl: string | null = null;
+
+          const direct = await extractWithRetry(task.url);
+          if (direct === '__cors_failure__') {
+            // Keep playback fallback, but do not permanently block extraction attempts.
+            setR2CorsModeEnabled(false);
+          } else {
+            dataUrl = direct;
+          }
+
+          inFlightThumbsRef.current.delete(task.key);
           if (cancelled) return;
           if (dataUrl) {
             setGeneratedThumbnails((prev) => {
@@ -325,6 +393,10 @@ export default function VideoGrid({ works }: VideoGridProps) {
             });
           } else {
             failedThumbsRef.current.add(task.key);
+            const tid = window.setTimeout(() => {
+              failedThumbsRef.current.delete(task.key);
+            }, 12000);
+            retryTimers.push(tid);
           }
         }
       });
@@ -336,8 +408,9 @@ export default function VideoGrid({ works }: VideoGridProps) {
 
     return () => {
       cancelled = true;
+      retryTimers.forEach((t) => clearTimeout(t));
     };
-  }, [works, sceneThumbKey, currentWorkIndex, currentSceneIndex, isMobile, shouldUseCrossOriginAnonymous]);
+  }, [works, currentWorkIndex, currentSceneIndex, isMobile, isPlaying, hoveredScene, failedPosterUrls, shouldUseCrossOriginAnonymous, isR2Url]);
 
   useEffect(() => {
     const container = document.querySelector('.viewer-container');
@@ -1249,13 +1322,38 @@ export default function VideoGrid({ works }: VideoGridProps) {
                       data-work-index={workIdx}
                     >
                       {firstScene ? (
-                        <img
-                          className="mobile-video"
-                          src={resolveScenePoster(workIdx, 0, firstScene)}
-                          alt={work.title}
-                          loading={workIdx < 2 ? 'eager' : 'lazy'}
-                          decoding="async"
-                        />
+                        (() => {
+                          const poster = resolveScenePoster(workIdx, 0, firstScene);
+                          if (poster) {
+                            return (
+                              <img
+                                className="mobile-video"
+                                src={poster}
+                                alt={work.title}
+                                loading={workIdx < 2 ? 'eager' : 'lazy'}
+                                decoding="async"
+                                onError={() => {
+                                  setFailedPosterUrls((prev) => {
+                                    if (prev.has(poster)) return prev;
+                                    const next = new Set(prev);
+                                    next.add(poster);
+                                    return next;
+                                  });
+                                }}
+                              />
+                            );
+                          }
+                          return (
+                            <video
+                              className="mobile-video"
+                              src={firstScene.proxiedVideoUrl ?? firstScene.videoUrl}
+                              muted
+                              playsInline
+                              preload="metadata"
+                              aria-label={work.title}
+                            />
+                          );
+                        })()
                       ) : (
                         <div className="project-placeholder">No scenes</div>
                       )}

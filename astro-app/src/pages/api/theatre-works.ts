@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { loadFromCache, saveToCache, fetchFromGoogleSheets, clearMemoryCache } from '../../utils/googleSheetsManager';
+import { fetchFromGoogleSheets, clearMemoryCache } from '../../utils/googleSheetsManager';
 
 export const prerender = false;
 
@@ -61,6 +61,21 @@ function buildProxiedUrl(videoUrl: string) {
   }
 }
 
+function deriveAutoThumbnailUrl(videoUrl: string): string | undefined {
+  if (!videoUrl || typeof videoUrl !== 'string') return undefined;
+  try {
+    const u = new URL(videoUrl);
+    if (!u.hostname.endsWith('.r2.dev')) return undefined;
+    if (!/\.mp4$/i.test(u.pathname)) return undefined;
+    u.pathname = u.pathname.replace(/\.mp4$/i, '.jpg');
+    u.search = '';
+    u.hash = '';
+    return u.toString();
+  } catch {
+    return undefined;
+  }
+}
+
 function normalizeWorksForProxy<T extends any[]>(works: T): T {
   const allowProxyUrls = !process.env.VERCEL;
   return (works || []).map((work: any) => {
@@ -79,6 +94,7 @@ function normalizeWorksForProxy<T extends any[]>(works: T): T {
         ...sceneWithoutThumb,
         videoUrl: canonicalVideoUrl,
         proxiedVideoUrl: computedProxied,
+        thumbnail: deriveAutoThumbnailUrl(canonicalVideoUrl),
       };
     });
 
@@ -127,19 +143,7 @@ export const GET: APIRoute = async (context) => {
 
     if (fresh && Array.isArray(fresh)) {
       const normalized = normalizeWorksForProxy(fresh as any[]);
-      await saveToCache(normalized);
       console.log('[api/theatre-works] fetched and cached works count=', normalized.length);
-        return new Response(JSON.stringify(normalized), { headers: jsonHeaders });
-    }
-
-    const cached = force === '1' ? null : await loadFromCache();
-    if (cached && Array.isArray(cached) && cached.length > 0) {
-      const normalized = normalizeWorksForProxy(cached);
-      try {
-        console.log('[api/theatre-works] returning cached works count=', normalized.length, 'sample=', JSON.stringify(normalized[0]));
-      } catch (e) {
-        console.log('[api/theatre-works] returning cached works count=', normalized.length);
-      }
         return new Response(JSON.stringify(normalized), { headers: jsonHeaders });
     }
 
