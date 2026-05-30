@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import VideoPlayer from './VideoPlayer';
 import CreditsPanel from './CreditsPanel';
+import PlayGlyph from './PlayGlyph';
 
 function isDebugSpacingEnabled() {
   try {
@@ -1358,7 +1359,8 @@ export default function VideoGrid({ works }: VideoGridProps) {
                         <div className="project-placeholder">No scenes</div>
                       )}
                       <button
-                        className="play-pause-button"
+                        type="button"
+                        className="play-pause-button play-glyph-button"
                         onClick={(e) => {
                           e.stopPropagation();
                           setCurrentWorkIndex(workIdx);
@@ -1368,7 +1370,7 @@ export default function VideoGrid({ works }: VideoGridProps) {
                         }}
                         aria-label={`Open project ${work.title}`}
                       >
-                        ▶
+                        <PlayGlyph />
                       </button>
                     </div>
                   </div>
@@ -1461,15 +1463,16 @@ export default function VideoGrid({ works }: VideoGridProps) {
                         aria-hidden="true"
                       />
                     )}
-                    <button 
-                      className="play-pause-button"
+                    <button
+                      type="button"
+                      className={`play-pause-button${isPlaying && workIdx === currentWorkIndex && sceneIdx === currentSceneIndex ? '' : ' play-glyph-button'}`}
                       onClick={(e) => {
                         e.stopPropagation();
                         handleSceneClick(workIdx, sceneIdx);
                       }}
                       aria-label={isPlaying && workIdx === currentWorkIndex && sceneIdx === currentSceneIndex ? 'Pause' : 'Play'}
                     >
-                      {isPlaying && workIdx === currentWorkIndex && sceneIdx === currentSceneIndex ? '⏸' : '▶'}
+                      {isPlaying && workIdx === currentWorkIndex && sceneIdx === currentSceneIndex ? '⏸' : <PlayGlyph />}
                     </button>
                   </div>
                 ))}

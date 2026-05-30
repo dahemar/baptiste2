@@ -2,6 +2,7 @@
 export const prerender = false;
 import '../styles/audiovisual.css';
 import { loadAudiovisualData } from '../utils/sectionContentManager';
+import PlayGlyph from '../components/PlayGlyph';
 
 let projects = [];
 try {
@@ -97,10 +98,8 @@ try {
                   ) : null}
 
                   {hasVideo && (
-                    <button type="button" class="av-play-overlay" aria-label="Play video">
-                      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                        <path d="M8 5.14v13.72L19 12 8 5.14z" fill="currentColor" />
-                      </svg>
+                    <button type="button" class="av-play-overlay play-glyph-button" aria-label="Play video">
+                      <PlayGlyph />
                     </button>
                   )}
                 </div>
