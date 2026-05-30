@@ -2,6 +2,7 @@
 export const prerender = false;
 import '../styles/music.css';
 import { loadMusicData } from '../utils/sectionContentManager';
+import { batchFetchBandcampCovers } from '../utils/bandcampScraper';
 
 const images = import.meta.glob('../assets/music/*.{jpg,jpeg,png,webp}', {
   eager: true,
@@ -23,45 +24,91 @@ const normalizeKey = (path: string) => {
   return path.split('/').pop() || '';
 };
 
-const matchedKeys = new Set<string>();
+interface MusicEntry {
+  key: string;
+  src: string;
+  title: string;
+  format: string;
+  year: string;
+  type: string;
+  url: string;
+  id: string;
+}
 
-const entries = Object.entries(images).map(([path, src]) => {
-  const key = normalizeKey(path);
-  const found = releases.find(r => r.coverKey === key);
-  if (found) matchedKeys.add(found.id);
-  return {
-    key,
-    src: typeof src === 'string' ? src : '',
-    title: found?.title || key.replace(/\.(jpg|jpeg|png|webp)$/i, ''),
-    format: found?.format || '',
-    year: found?.year || '',
-    type: found?.type || 'other',
-    url: found?.url || allReleasesUrl,
-    id: found?.id || '',
-  };
+const matchedIds = new Set<string>();
+
+// Priority 1: user-specified cover_url (highest priority)
+const externalEntries: MusicEntry[] = releases
+  .filter((item) => !!item.coverUrl)
+  .map((item) => {
+    matchedIds.add(item.id);
+    return {
+      key: item.coverKey || item.id,
+      src: item.coverUrl || '',
+      title: item.title,
+      format: item.format,
+      year: item.year,
+      type: item.type || 'other',
+      url: item.url || allReleasesUrl,
+      id: item.id,
+    };
+  });
+
+// Priority 2: Bandcamp automatic scraping (medium priority)
+const bandcampReleases = releases.filter((item) => {
+  if (!item.url || matchedIds.has(item.id)) return false;
+  try {
+    return new URL(item.url).hostname.endsWith('.bandcamp.com');
+  } catch {
+    return false;
+  }
 });
 
-const externalOnlyEntries = releases
-  .filter((item) => {
-    if (!item.coverUrl) return false;
-    const alreadyMatched = entries.some((entry) => entry.key === item.coverKey);
-    if (alreadyMatched) return false;
-    matchedKeys.add(item.id);
-    return true;
-  })
-  .map((item) => ({
-    key: item.coverKey || item.id,
-    src: item.coverUrl || '',
-    title: item.title,
-    format: item.format,
-    year: item.year,
-    type: item.type || 'other',
-    url: item.url || allReleasesUrl,
-    id: item.id,
-  }));
+const bandcampCovers = bandcampReleases.length > 0
+  ? await batchFetchBandcampCovers(
+      bandcampReleases.map((r) => ({ id: r.id, url: r.url || '' })),
+    )
+  : new Map<string, string>();
 
-const noImageEntries = releases
-  .filter((item) => !matchedKeys.has(item.id))
+const bandcampEntries: MusicEntry[] = releases
+  .filter((item) => bandcampCovers.has(item.id) && !matchedIds.has(item.id))
+  .map((item) => {
+    matchedIds.add(item.id);
+    return {
+      key: item.coverKey || item.id,
+      src: bandcampCovers.get(item.id)!,
+      title: item.title,
+      format: item.format,
+      year: item.year,
+      type: item.type || 'other',
+      url: item.url || allReleasesUrl,
+      id: item.id,
+    };
+  });
+
+// Priority 3: local files matching cover_key (lowest image priority)
+const localEntries: MusicEntry[] = Object.entries(images)
+  .map(([path, src]) => {
+    const key = normalizeKey(path);
+    const found = releases.find((r) => r.coverKey === key && !matchedIds.has(r.id));
+    if (!found) return null;
+    matchedIds.add(found.id);
+    return {
+      key,
+      src: typeof src === 'string' ? src : '',
+      title: found.title || key.replace(/\.(jpg|jpeg|png|webp)$/i, ''),
+      format: found.format || '',
+      year: found.year || '',
+      type: found.type || 'other',
+      url: found.url || allReleasesUrl,
+      id: found.id,
+    };
+  })
+  .filter((e): e is MusicEntry => e !== null);
+
+// Priority 4: no image — show placeholder
+const noImageEntries: MusicEntry[] = releases
+  .filter((item) => !matchedIds.has(item.id))
   .map((item) => ({
     key: item.coverKey || item.id,
     src: '',
@@ -73,9 +120,9 @@ const noImageEntries = releases
     id: item.id,
   }));
 
-const mergedEntries = [...entries, ...externalOnlyEntries, ...noImageEntries];
+const mergedEntries: MusicEntry[] = [...externalEntries, ...bandcampEntries, ...localEntries, ...noImageEntries];
 
-const sortNewestFirst = (a: { year: string; id: string }, b: { year: string; id: string }) =>
+const sortNewestFirst = (a: MusicEntry, b: MusicEntry) =>
   Number(b.year) - Number(a.year) || Number(b.id) - Number(a.id);
 
 const albums = mergedEntries.filter(item => item.type === 'album').sort(sortNewestFirst);
