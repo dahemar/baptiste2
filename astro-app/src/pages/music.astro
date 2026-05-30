@@ -49,7 +49,7 @@ const externalEntries: MusicEntry[] = releases
       title: item.title,
       format: item.format,
       year: item.year,
-      type: item.type || 'other',
+      type: (item.type || 'other').toLowerCase(),
       url: item.url || allReleasesUrl,
       id: item.id,
       sortOrder: item.sortOrder,
@@ -82,7 +82,7 @@ const bandcampEntries: MusicEntry[] = releases
       title: item.title,
       format: item.format,
       year: item.year,
-      type: item.type || 'other',
+      type: (item.type || 'other').toLowerCase(),
       url: item.url || allReleasesUrl,
       id: item.id,
       sortOrder: item.sortOrder,
@@ -102,7 +102,7 @@ const localEntries: MusicEntry[] = Object.entries(images)
       title: found.title || key.replace(/\.(jpg|jpeg|png|webp)$/i, ''),
       format: found.format || '',
       year: found.year || '',
-      type: found.type || 'other',
+      type: (found.type || 'other').toLowerCase(),
       url: found.url || allReleasesUrl,
       id: found.id,
       sortOrder: found.sortOrder,
@@ -119,7 +119,7 @@ const noImageEntries: MusicEntry[] = releases
     title: item.title,
     format: item.format,
     year: item.year,
-    type: item.type || 'other',
+    type: (item.type || 'other').toLowerCase(),
     url: item.url || allReleasesUrl,
     id: item.id,
     sortOrder: item.sortOrder,
@@ -129,12 +129,13 @@ const mergedEntries: MusicEntry[] = [...externalEntries, ...bandcampEntries, ...
 
 const sortCustom = (a: MusicEntry, b: MusicEntry) =>
   (Number(b.sortOrder) || 0) - (Number(a.sortOrder) || 0) ||
-  Number(b.year) - Number(a.year) ||
-  Number(b.id) - Number(a.id);
+  Number(b.id) - Number(a.id) ||
+  Number(b.year) - Number(a.year);
 
 const albums = mergedEntries.filter(item => item.type === 'album').sort(sortCustom);
 const eps = mergedEntries.filter(item => item.type === 'ep').sort(sortCustom);
 const compilations = mergedEntries.filter(item => item.type === 'compilation').sort(sortCustom);
+const singles = mergedEntries.filter(item => item.type === 'single').sort(sortCustom);
 ---
 
 <!DOCTYPE html>
@@ -143,6 +144,8 @@ const compilations = mergedEntries.filter(item => item.type === 'compilation').s
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Baptiste Le Chapelain</title>
+  <link rel="dns-prefetch" href="//pub-f04cf0f8494f457e889559aa0b6e57b7.r2.dev">
+  <link rel="preconnect" href="https://pub-f04cf0f8494f457e889559aa0b6e57b7.r2.dev" crossorigin>
   <link rel="stylesheet" href="/theatre-works.css">
 </head>
 <body>
@@ -234,6 +237,37 @@ const compilations = mergedEntries.filter(item => item.type === 'compilation').s
         <h2 class="section-title">compilations</h2>
         <div class="music-grid">
           {compilations.map(item => (
+            <a
+              key={item.key}
+              class="music-card"
+              href={item.url}
+              target="_blank"
+              rel="noreferrer"
+              title={item.title}
+            >
+              <div class="music-cover">
+                {item.src ? (
+                  <img src={item.src} alt={item.title} loading="lazy" />
+                ) : (
+                  <div class="music-cover-placeholder">{item.title.charAt(0)}</div>
+                )}
+              </div>
+              <div class="music-meta">
+                <div class="music-name">{item.title}</div>
+                {item.format && <div class="music-format">{item.format}</div>}
+                {item.year && <div class="music-year">{item.year}</div>}
+              </div>
+            </a>
+          ))}
+        </div>
+      </div>
+    )}
+
+    {singles.length > 0 && (
+      <div class="music-section">
+        <h2 class="section-title">singles</h2>
+        <div class="music-grid">
+          {singles.map(item => (
             <a
               key={item.key}
               class="music-card"

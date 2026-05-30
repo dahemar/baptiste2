@@ -1,4 +1,4 @@
-import { uploadImageToR2 } from './r2Uploader';
+import { headR2Object, uploadImageToR2 } from './r2Uploader';
 
 const cache = new Map<string, { url: string | null; ts: number }>();
 const CACHE_TTL = 24 * 60 * 60 * 1000;
@@ -47,9 +47,13 @@ async function downloadImage(url: string, timeoutMs = 10000): Promise<Buffer | n
   }
 }
 
+export function musicCoverR2Key(releaseId: string): string {
+  return `music-covers/${releaseId}.jpg`;
+}
+
 /** Public R2 URL for a music cover key */
 export function musicCoverR2Url(releaseId: string): string {
-  return `https://pub-f04cf0f8494f457e889559aa0b6e57b7.r2.dev/music-covers/${encodeURIComponent(releaseId)}.jpg`;
+  return `https://pub-f04cf0f8494f457e889559aa0b6e57b7.r2.dev/${musicCoverR2Key(releaseId)}`;
 }
 
 export async function scrapeAndUploadBandcampCover(
@@ -57,14 +61,18 @@ export async function scrapeAndUploadBandcampCover(
   bandcampUrl: string,
   timeoutMs = 10000,
 ): Promise<string | null> {
-  const r2Key = `music-covers/${releaseId}.jpg`;
+  const r2Key = musicCoverR2Key(releaseId);
   const r2Url = musicCoverR2Url(releaseId);
 
   const cached = cache.get(bandcampUrl);
   if (cached && Date.now() - cached.ts < CACHE_TTL) return cached.url;
 
   try {
-    // 1. Scrape the cover URL from Bandcamp HTML
+    if (await headR2Object(r2Key)) {
+      cache.set(bandcampUrl, { url: r2Url, ts: Date.now() });
+      return r2Url;
+    }
+
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     const pageRes = await fetch(bandcampUrl, {
@@ -85,25 +93,17 @@ export async function scrapeAndUploadBandcampCover(
       return null;
     }
 
-    // 2. Download the cover image
     const imageBuffer = await downloadImage(coverUrl, timeoutMs);
     if (!imageBuffer || imageBuffer.length === 0) {
       cache.set(bandcampUrl, { url: null, ts: Date.now() });
       return null;
     }
 
-    // 3. Upload to R2 (dev only; in Vercel production, return the original URL)
-    if (process.env.VERCEL) {
-      cache.set(bandcampUrl, { url: coverUrl, ts: Date.now() });
-      return coverUrl;
-    }
-
     try {
-      await uploadImageToR2(r2Key, imageBuffer);
-      cache.set(bandcampUrl, { url: r2Url, ts: Date.now() });
-      return r2Url;
+      const uploadedUrl = await uploadImageToR2(r2Key, imageBuffer);
+      cache.set(bandcampUrl, { url: uploadedUrl, ts: Date.now() });
+      return uploadedUrl;
     } catch {
-      // R2 upload failed — fall back to original Bandcamp URL
       cache.set(bandcampUrl, { url: coverUrl, ts: Date.now() });
       return coverUrl;
     }
