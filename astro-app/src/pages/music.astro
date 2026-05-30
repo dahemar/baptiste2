@@ -33,6 +33,7 @@ interface MusicEntry {
   type: string;
   url: string;
   id: string;
+  sortOrder: string;
 }
 
 const matchedIds = new Set<string>();
@@ -51,6 +52,7 @@ const externalEntries: MusicEntry[] = releases
       type: item.type || 'other',
       url: item.url || allReleasesUrl,
       id: item.id,
+      sortOrder: item.sortOrder,
     };
   });
 
@@ -83,6 +85,7 @@ const bandcampEntries: MusicEntry[] = releases
       type: item.type || 'other',
       url: item.url || allReleasesUrl,
       id: item.id,
+      sortOrder: item.sortOrder,
     };
   });
 
@@ -102,6 +105,7 @@ const localEntries: MusicEntry[] = Object.entries(images)
       type: found.type || 'other',
       url: found.url || allReleasesUrl,
       id: found.id,
+      sortOrder: found.sortOrder,
     };
   })
   .filter((e): e is MusicEntry => e !== null);
@@ -118,16 +122,19 @@ const noImageEntries: MusicEntry[] = releases
     type: item.type || 'other',
     url: item.url || allReleasesUrl,
     id: item.id,
+    sortOrder: item.sortOrder,
   }));
 
 const mergedEntries: MusicEntry[] = [...externalEntries, ...bandcampEntries, ...localEntries, ...noImageEntries];
 
-const sortNewestFirst = (a: MusicEntry, b: MusicEntry) =>
-  Number(b.year) - Number(a.year) || Number(b.id) - Number(a.id);
+const sortCustom = (a: MusicEntry, b: MusicEntry) =>
+  (Number(b.sortOrder) || 0) - (Number(a.sortOrder) || 0) ||
+  Number(b.year) - Number(a.year) ||
+  Number(b.id) - Number(a.id);
 
-const albums = mergedEntries.filter(item => item.type === 'album').sort(sortNewestFirst);
-const eps = mergedEntries.filter(item => item.type === 'ep').sort(sortNewestFirst);
-const compilations = mergedEntries.filter(item => item.type === 'compilation').sort(sortNewestFirst);
+const albums = mergedEntries.filter(item => item.type === 'album').sort(sortCustom);
+const eps = mergedEntries.filter(item => item.type === 'ep').sort(sortCustom);
+const compilations = mergedEntries.filter(item => item.type === 'compilation').sort(sortCustom);
 ---
 
 <!DOCTYPE html>

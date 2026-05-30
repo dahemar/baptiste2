@@ -17,6 +17,7 @@ export interface MusicRelease {
   url: string;
   coverKey: string;
   coverUrl?: string;
+  sortOrder: string;
 }
 
 export interface AudiovisualVideo {
@@ -311,6 +312,7 @@ export async function loadMusicData(): Promise<{ allReleasesUrl: string; release
       url: rowValue(row, ['url', 'discogs_url', 'link', 'URL']),
       coverKey: rowValue(row, ['cover_key', 'key', 'image_key', 'cover']),
       coverUrl: rowValue(row, ['cover_url', 'image_url']),
+      sortOrder: rowValue(row, ['sort_order', 'order', 'position']),
     }))
     .filter((row) => row.title.length > 0);
 
