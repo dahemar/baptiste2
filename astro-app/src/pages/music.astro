@@ -129,7 +129,7 @@ const mergedEntries: MusicEntry[] = [...externalEntries, ...bandcampEntries, ...
 
 const sortCustom = (a: MusicEntry, b: MusicEntry) =>
   (Number(b.sortOrder) || 0) - (Number(a.sortOrder) || 0) ||
-  Number(b.id) - Number(a.id) ||
+  Number(a.id) - Number(b.id) ||
   Number(b.year) - Number(a.year);
 
 const albums = mergedEntries.filter(item => item.type === 'album').sort(sortCustom);
