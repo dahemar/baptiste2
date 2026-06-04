@@ -1525,7 +1525,7 @@ body {
     flex: 1;
     min-height: 0;
     padding-bottom: calc(156px + env(safe-area-inset-bottom)); /* +20px adicionales reales */
-    margin-top: -80px; /* subir créditos 80px en player-mode (extendido 4px) */
+    margin-top: -56px; /* overlap reducido: más aire entre vídeo y título de créditos */
   }
 
   /* Keep video content aligned inside wrapper */

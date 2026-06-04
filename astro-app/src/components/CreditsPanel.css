@@ -216,7 +216,11 @@
   }
 
   .credits-scroll-region {
-    padding: 1rem 1rem calc(116px + env(safe-area-inset-bottom));
+    padding: 1.35rem 1rem calc(116px + env(safe-area-inset-bottom));
+  }
+
+  .mobile-fixed-player .credits-scroll-region {
+    padding-top: 1.5rem;
   }
 
   .mobile-fixed-player .credits-panel {
@@ -234,7 +238,7 @@
   }
 
   .mobile-fixed-player .credits-panel.visible {
-    margin-top: -84px;
+    margin-top: -60px;
     z-index: 3;
   }
 
