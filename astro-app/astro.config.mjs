@@ -37,10 +37,26 @@ import vercel from '@astrojs/vercel/serverless';
 // https://astro.build/config
 export default defineConfig({
   adapter: vercel(),
+  prefetch: {
+    defaultStrategy: 'load',
+  },
   root: '.', // Forzar root explícito para evitar escaneo del directorio padre
   integrations: [react()],
   // Optimización de build
   vite: {
+    // Avoid jsxDEV in dev: Vite's prebundled react/jsx-dev-runtime can resolve to the
+    // production stub (jsxDEV = undefined) and blank client-only islands like VideoGrid.
+    esbuild: {
+      jsx: 'automatic',
+      jsxDev: false,
+    },
+    optimizeDeps: {
+      esbuildOptions: {
+        define: {
+          'process.env.NODE_ENV': '"development"',
+        },
+      },
+    },
     build: {
       rollupOptions: {
         output: {

@@ -21,34 +21,55 @@ function isAllowedHost(hostname: string) {
   }) || hostname.endsWith('.r2.dev');
 }
 
-const GLOBAL_KEY = '__dev_proxy_register_map__' as const;
-const registry: Map<string, string> = (global as any)[GLOBAL_KEY] || new Map();
-
 async function proxyFetch(target: string, incomingRange?: string | null) {
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = {
+    'User-Agent': 'astro-proxy/1.0',
+  };
   if (incomingRange) headers['range'] = incomingRange;
   const res = await fetch(target, { method: 'GET', redirect: 'follow', headers });
   return res;
 }
 
-export const GET: APIRoute = async ({ request }) => {
-  if (!import.meta.env.DEV) return new Response('Not allowed', { status: 403 });
+function isProduction() {
+  return !import.meta.env.DEV;
+}
 
+const GLOBAL_KEY = '__dev_proxy_register_map__' as const;
+const registry: Map<string, string> = (global as any)[GLOBAL_KEY] || new Map();
+
+export const GET: APIRoute = async ({ request }) => {
   try {
     const url = new URL(String(request.url));
+    const directUrl = url.searchParams.get('url');
     const id = url.searchParams.get('id');
-    if (!id) return new Response('Missing id', { status: 400 });
+    let target: string | null = null;
 
-    const target = registry.get(id);
-    if (!target) return new Response('Not found', { status: 404 });
+    if (directUrl) {
+      // Production mode: accept direct URL (validated against allowed hosts)
+      try {
+        const parsed = new URL(directUrl);
+        if (isAllowedHost(parsed.hostname)) {
+          target = directUrl;
+        } else {
+          return new Response('Host not allowed', { status: 403 });
+        }
+      } catch {
+        return new Response('Invalid URL', { status: 400 });
+      }
+    } else if (id) {
+      // Dev mode: registry-based lookup
+      target = registry.get(id);
+      if (!target) return new Response('Not found', { status: 404 });
+    } else {
+      return new Response('Missing url or id', { status: 400 });
+    }
 
     const incomingRange = request.headers.get('range');
     const upstream = await proxyFetch(target, incomingRange);
 
-    // Logging minimal info
     const upstreamContentType = upstream.headers.get('content-type');
     const upstreamContentDisposition = upstream.headers.get('content-disposition');
-    console.log('[api/proxy/serve] serve', { id, target, resolved: upstream.url, status: upstream.status, incomingRange, contentType: upstreamContentType, contentDisposition: upstreamContentDisposition });
+    console.log('[api/proxy/serve] serve', { target, resolved: upstream.url, status: upstream.status, contentType: upstreamContentType, contentDisposition: upstreamContentDisposition });
 
     const headers = new Headers();
     ['content-type','content-length','content-range','accept-ranges','last-modified','etag','content-disposition'].forEach(h => {
@@ -56,7 +77,6 @@ export const GET: APIRoute = async ({ request }) => {
       if (v) headers.set(h, v);
     });
 
-    // If upstream doesn't set a useful content-type but this is clearly an .mp4 file, set video/mp4
     const resolvedUrlLower = String(upstream.url || '').toLowerCase();
     const dispositionLower = String(upstreamContentDisposition || '').toLowerCase();
     const looksLikeMp4 = resolvedUrlLower.endsWith('.mp4') || dispositionLower.includes('.mp4');
@@ -67,7 +87,6 @@ export const GET: APIRoute = async ({ request }) => {
       headers.set('content-type', 'video/mp4');
     }
 
-    // Allow CORS for dev use
     headers.set('Access-Control-Allow-Origin', '*');
     headers.set('Accept-Ranges', upstream.headers.get('accept-ranges') || 'bytes');
 
@@ -79,17 +98,33 @@ export const GET: APIRoute = async ({ request }) => {
 };
 
 export const HEAD: APIRoute = async ({ request }) => {
-  if (!import.meta.env.DEV) return new Response('Not allowed', { status: 403 });
   try {
     const url = new URL(String(request.url));
+    const directUrl = url.searchParams.get('url');
     const id = url.searchParams.get('id');
-    if (!id) return new Response('Missing id', { status: 400 });
-    const target = registry.get(id);
-    if (!target) return new Response('Not found', { status: 404 });
+    let target: string | null = null;
+
+    if (directUrl) {
+      try {
+        const parsed = new URL(directUrl);
+        if (isAllowedHost(parsed.hostname)) {
+          target = directUrl;
+        } else {
+          return new Response('Host not allowed', { status: 403 });
+        }
+      } catch {
+        return new Response('Invalid URL', { status: 400 });
+      }
+    } else if (id) {
+      target = registry.get(id);
+      if (!target) return new Response('Not found', { status: 404 });
+    } else {
+      return new Response('Missing url or id', { status: 400 });
+    }
 
     const upstream = await fetch(target, { method: 'HEAD', redirect: 'follow' });
 
-    console.log('[api/proxy/serve] HEAD', { id, target, resolved: upstream.url, status: upstream.status, contentType: upstream.headers.get('content-type') });
+    console.log('[api/proxy/serve] HEAD', { target, resolved: upstream.url, status: upstream.status, contentType: upstream.headers.get('content-type') });
 
     const headers = new Headers();
     ['content-type','content-length','accept-ranges','last-modified','etag','content-disposition'].forEach(h => {
@@ -97,7 +132,6 @@ export const HEAD: APIRoute = async ({ request }) => {
       if (v) headers.set(h, v);
     });
 
-    // If upstream doesn't set a useful content-type but this is clearly an .mp4 file, set video/mp4
     const upstreamContentType = upstream.headers.get('content-type');
     const upstreamContentDisposition = upstream.headers.get('content-disposition');
     const resolvedUrlLower = String(upstream.url || '').toLowerCase();

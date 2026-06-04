@@ -44,10 +44,28 @@ const isSafeForWebAudio = (el: HTMLMediaElement): boolean => {
     return true; // relative URL or unparseable — treat as same-origin
   }
 
-  // Cross-origin: only safe if the element was loaded with crossOrigin attribute
-  // (which makes the browser enforce CORS and allows Web Audio to read audio data)
-  return el.crossOrigin !== null;
+  // Cross-origin: needs explicit CORS mode (not merely a present attribute)
+  return el.crossOrigin === 'anonymous' || el.crossOrigin === 'use-credentials';
 };
+
+/** Wire the playing <video> to the shared analyser (safe to call after each play). */
+export function forceConnectVideoToVuMeter(video: HTMLVideoElement | null | undefined) {
+  if (!video) return;
+  if (!isSafeForWebAudio(video)) {
+    CONNECTED_AUDIO_ELEMENTS.delete(video);
+    return;
+  }
+  const mediaEl = video as HTMLMediaElement & {
+    _webAudioSource?: MediaElementAudioSourceNode;
+    _audioNode?: MediaElementAudioSourceNode;
+  };
+  if (mediaEl._webAudioSource || mediaEl._audioNode) {
+    CONNECTED_AUDIO_ELEMENTS.add(video);
+    return;
+  }
+  CONNECTED_AUDIO_ELEMENTS.delete(video);
+  connectMediaToAnalyser(video);
+}
 
 // Connect audio/video element to global analyser
 const connectMediaToAnalyser = (mediaElement: HTMLMediaElement | null) => {
@@ -58,8 +76,6 @@ const connectMediaToAnalyser = (mediaElement: HTMLMediaElement | null) => {
   // IMPORTANT: Do NOT call createMediaElementSource on cross-origin media without
   // crossOrigin attribute — doing so silences the element's audio output permanently.
   if (!isSafeForWebAudio(mediaElement)) {
-    // Mark as "connected" so we don't retry, but skip actual Web Audio connection
-    CONNECTED_AUDIO_ELEMENTS.add(mediaElement);
     return;
   }
 
@@ -115,9 +131,16 @@ export default function VUMeter({ videoRef, currentWorkIndex, currentSceneIndex,
 
   const ensureConnectedToPlayingVideo = () => {
     const targetVideo = videoRef?.current ?? findPlayingVideo();
-    if (targetVideo && targetVideo !== lastActiveVideoRef.current) {
+    if (!targetVideo || targetVideo.paused || targetVideo.ended) return;
+
+    const mediaEl = targetVideo as HTMLMediaElement & {
+      _webAudioSource?: MediaElementAudioSourceNode;
+    };
+    const alreadyWired = !!mediaEl._webAudioSource;
+
+    if (targetVideo !== lastActiveVideoRef.current || !alreadyWired) {
       lastActiveVideoRef.current = targetVideo;
-      connectMediaToAnalyser(targetVideo);
+      forceConnectVideoToVuMeter(targetVideo);
     }
   };
 
@@ -247,6 +270,8 @@ export default function VUMeter({ videoRef, currentWorkIndex, currentSceneIndex,
 
   // Connect and reconnect video element to analyser when it changes
   useEffect(() => {
+    lastActiveVideoRef.current = null;
+
     const getActiveVideo = () => {
       if (videoRef?.current) return videoRef.current;
       const selector = `[data-work-index="${currentWorkIndex}"][data-scene-index="${currentSceneIndex}"] video`;
@@ -265,14 +290,14 @@ export default function VUMeter({ videoRef, currentWorkIndex, currentSceneIndex,
       const activeVideo = getActiveVideo();
       if (!activeVideo) return;
       ensureAudioContext();
-      connectMediaToAnalyser(activeVideo);
+      forceConnectVideoToVuMeter(activeVideo);
     };
 
     const handlePlay = (event: Event) => {
       const target = event.target as HTMLVideoElement | null;
-      if (target && target.tagName === 'VIDEO') {
+      if (target && target.tagName === 'VIDEO' && !target.closest('.floating-video-window')) {
         ensureAudioContext();
-        connectMediaToAnalyser(target);
+        forceConnectVideoToVuMeter(target);
       }
     };
 

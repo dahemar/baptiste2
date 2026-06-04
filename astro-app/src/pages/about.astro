@@ -1,0 +1,149 @@
+---
+export const prerender = false;
+import '../styles/about.css';
+import { loadAboutData } from '../utils/sectionContentManager';
+
+let about = {
+  presentationTitle: { en: '', fr: '' },
+  presentationIntro: { en: '', fr: '' },
+  presentationTheatre: { en: '', fr: '' },
+  presentationMusic: { en: '', fr: '' },
+  presentationAudiovisual: { en: '', fr: '' },
+  presentationImage: '',
+  bioP1: { en: '', fr: '' },
+  bioP2: { en: '', fr: '' },
+  bioP3: { en: '', fr: '' },
+  bioP4: { en: '', fr: '' },
+  contactEmail: '',
+  contactInstagram: '',
+};
+try {
+  about = await loadAboutData();
+} catch {}
+---
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Baptiste Le Chapelain</title>
+  <link rel="stylesheet" href="/theatre-works.css">
+</head>
+<body>
+  <nav class="main-nav">
+    <div class="nav-container">
+        <div class="nav-links">
+          <a href="/about" class="nav-link active" data-astro-prefetch="load">about</a>
+          <a href="/" class="nav-link home-link" aria-label="theatre" data-astro-prefetch="load"><span class="desktop-label">sound for theatre</span><span class="mobile-label">theatre</span></a>
+          <a href="/music" class="nav-link" data-astro-prefetch="load">music</a>
+          <a href="/audiovisual" class="nav-link" data-astro-prefetch="load">audiovisual</a>
+        </div>
+    </div>
+  </nav>
+
+  <div class="about-page">
+    <div class="about-lang-toggle" aria-label="Language">
+      <button type="button" class="about-lang-btn active" data-lang="en">en</button>
+      <span class="about-lang-sep" aria-hidden="true">/</span>
+      <button type="button" class="about-lang-btn" data-lang="fr">fr</button>
+    </div>
+
+    <div class="about-section">
+      <h2 class="about-section-title">presentation</h2>
+      <p class="about-lead">
+        <span data-lang-text="en">{about.presentationTitle.en || 'Baptiste Le Chapelain'}</span>
+        <span data-lang-text="fr">{about.presentationTitle.fr || about.presentationTitle.en || 'Baptiste Le Chapelain'}</span>
+      </p>
+      <p class="about-text">
+        <span data-lang-text="en">{about.presentationIntro.en || ''}</span>
+        <span data-lang-text="fr">{about.presentationIntro.fr || about.presentationIntro.en || ''}</span>
+      </p>
+      <p class="about-text">
+        <span data-lang-text="en">{about.presentationTheatre.en || ''}</span>
+        <span data-lang-text="fr">{about.presentationTheatre.fr || about.presentationTheatre.en || ''}</span>
+      </p>
+      <p class="about-text">
+        <span data-lang-text="en">{about.presentationMusic.en || ''}</span>
+        <span data-lang-text="fr">{about.presentationMusic.fr || about.presentationMusic.en || ''}</span>
+      </p>
+      <p class="about-text">
+        <span data-lang-text="en">{about.presentationAudiovisual.en || ''}</span>
+        <span data-lang-text="fr">{about.presentationAudiovisual.fr || about.presentationAudiovisual.en || ''}</span>
+      </p>
+
+      {about.presentationImage ? (
+        <div class="about-image">
+          <img src={about.presentationImage} alt="" loading="lazy" />
+        </div>
+      ) : null}
+    </div>
+
+    <div class="about-divider" role="separator"></div>
+
+    <div class="about-section about-bio">
+      <h2 class="about-section-title">bio</h2>
+      <p data-lang-block="en">{about.bioP1.en || ''}</p>
+      <p data-lang-block="fr">{about.bioP1.fr || about.bioP1.en || ''}</p>
+
+      <p data-lang-block="en">{about.bioP2.en || ''}</p>
+      <p data-lang-block="fr">{about.bioP2.fr || about.bioP2.en || ''}</p>
+
+      <p data-lang-block="en">{about.bioP3.en || ''}</p>
+      <p data-lang-block="fr">{about.bioP3.fr || about.bioP3.en || ''}</p>
+
+      <p data-lang-block="en">{about.bioP4.en || ''}</p>
+      <p data-lang-block="fr">{about.bioP4.fr || about.bioP4.en || ''}</p>
+    </div>
+
+    <div class="about-divider" role="separator"></div>
+
+    <div class="about-section about-contact">
+      <h2 class="about-section-title">contact</h2>
+      <div class="about-contact-links">
+        {about.contactEmail ? (
+          <a class="about-contact-link" href={`mailto:${about.contactEmail}`}>{about.contactEmail}</a>
+        ) : null}
+        {about.contactInstagram ? (
+          <a class="about-contact-link" href={`https://instagram.com/${about.contactInstagram.replace('@', '')}`} target="_blank" rel="noopener noreferrer">
+            @{about.contactInstagram.replace('@', '')}
+          </a>
+        ) : null}
+      </div>
+    </div>
+  </div>
+
+  <script is:inline>
+    (function() {
+      var langButtons = document.querySelectorAll('.about-lang-btn');
+      var currentLang = (function() {
+        try {
+          var u = new URL(window.location.href);
+          if (u.searchParams.get('lang') === 'fr') return 'fr';
+        } catch (e) {}
+        try { if (localStorage.getItem('about-lang') === 'fr') return 'fr'; } catch (e) {}
+        return 'en';
+      })();
+
+      function setLang(lang) {
+        if (lang !== 'en' && lang !== 'fr') lang = 'en';
+        currentLang = lang;
+        langButtons.forEach(function(b) { b.classList.toggle('active', b.dataset.lang === lang); });
+        document.documentElement.setAttribute('data-about-lang', lang);
+        try { localStorage.setItem('about-lang', lang); } catch (e) {}
+        try {
+          var u = new URL(window.location.href);
+          u.searchParams.set('lang', lang);
+          window.history.replaceState({}, '', u.toString());
+        } catch (e) {}
+      }
+
+      langButtons.forEach(function(btn) {
+        btn.addEventListener('click', function() { setLang(btn.dataset.lang); });
+      });
+
+      setLang(currentLang);
+    })();
+  </script>
+</body>
+</html>

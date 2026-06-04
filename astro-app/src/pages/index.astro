@@ -4,15 +4,22 @@ import VideoGrid from '../components/VideoGrid';
 
 export const prerender = false;
 
+Astro.response.headers.set('Cache-Control', 'no-store, must-revalidate');
+
+const forceSheetRefresh = Astro.url.searchParams.get('force') === '1';
+
 // Load theatre works data at build time or on-demand
 let works = [];
+let audioFiles = [];
 try {
-  console.log('[theatre-works] calling loadTheatreWorksData');
-  works = await sheetsManager.loadTheatreWorksData();
-  console.log('[theatre-works] loadTheatreWorksData returned', Array.isArray(works) ? works.length : typeof works);
+  [works, audioFiles] = await Promise.all([
+    sheetsManager.loadTheatreWorksData({ force: forceSheetRefresh }),
+    sheetsManager.loadTheatreAudioFilesData({ force: forceSheetRefresh }),
+  ]);
 } catch (e) {
-  console.error('[theatre-works] loadTheatreWorksData error', e?.stack ?? e);
+  console.error('[theatre-works] load failed', e?.stack ?? e);
   works = [];
+  audioFiles = [];
 }
 const totalVideos = works.reduce((sum, work) => sum + work.scenes.length, 0);
 
@@ -28,8 +35,11 @@ const credits = currentWork?.credits ? [
     <meta charset="utf-8" />
 
     <link rel="dns-prefetch" href="//pub-f04cf0f8494f457e889559aa0b6e57b7.r2.dev" />
+    <link rel="dns-prefetch" href="//sheets.googleapis.com" />
+    <link rel="dns-prefetch" href="//docs.google.com" />
     <link rel="preconnect" href="https://pub-f04cf0f8494f457e889559aa0b6e57b7.r2.dev" crossorigin />
     <link rel="stylesheet" href="/theatre-works.css" />
+    <link rel="stylesheet" href="/floating-video.css" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Baptiste Le Chapelain</title>
     <style>
@@ -42,10 +52,10 @@ const credits = currentWork?.credits ? [
       <div class="nav-container">
         <!-- main-nav back button intentionally removed for theatre-works view; modal provides its own nav -->
         <div class="nav-links">
-          <a href="/" class="nav-link home-link active" aria-label="theatre"><span class="desktop-label">sound for theatre</span><span class="mobile-label">theatre</span></a>
-          <a href="/music" class="nav-link">music</a>
-          <a href="/audiovisual" class="nav-link">audiovisual</a>
-          <a href="/contact" class="nav-link">contact</a>
+          <a href="/about" class="nav-link" data-astro-prefetch="load">about</a>
+          <a href="/" class="nav-link home-link active" aria-label="theatre" data-astro-prefetch="load"><span class="desktop-label">sound for theatre</span><span class="mobile-label">theatre</span></a>
+          <a href="/music" class="nav-link" data-astro-prefetch="load">music</a>
+          <a href="/audiovisual" class="nav-link" data-astro-prefetch="load">audiovisual</a>
         </div>
       </div>
     </nav>
@@ -59,7 +69,7 @@ const credits = currentWork?.credits ? [
                 <p>No works found</p>
               </div>
             ) : (
-              <VideoGrid works={works} client:only="react" />
+              <VideoGrid works={works} audioFiles={audioFiles} client:only="react" />
             )}
           </div>
         </div>

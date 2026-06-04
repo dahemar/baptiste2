@@ -1,7 +1,10 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
-import VideoPlayer from './VideoPlayer';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import CreditsPanel from './CreditsPanel';
-import PlayGlyph from './PlayGlyph';
+import PlayGlyph, { PauseGlyph } from './PlayGlyph';
+import FloatingVideoWindow, { VideoPopoutButton } from './FloatingVideoWindow';
+import { capturePosterDataUrl, sceneVideoSource } from '../utils/scenePosterCapture';
+import { forceConnectVideoToVuMeter } from './VUMeter';
+import { THEATRE_FILES_VIEW_ENABLED } from '../config/features';
 
 function isDebugSpacingEnabled() {
   try {
@@ -37,11 +40,48 @@ interface Scene {
   proxiedVideoUrl?: string;
   thumbnail?: string;
   duration?: number;
+  name?: string;
+  title?: string;
 }
+
+type TheatreViewMode = 'video' | 'playlist';
 
 /** Stable cache key: canonical video URL from Sheets (updates when the sheet URL changes). */
 function scenePosterCacheKey(scene?: Scene | null): string {
   return String(scene?.videoUrl || scene?.proxiedVideoUrl || '').trim();
+}
+
+function sceneSource(scene?: Scene | null): string {
+  return String(scene?.proxiedVideoUrl || scene?.videoUrl || '').trim();
+}
+
+function audioFileSource(file?: AudioFile | null): string {
+  return String(file?.proxiedAudioUrl || file?.audioUrl || '').trim();
+}
+
+function formatAudioTime(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
+  const total = Math.floor(seconds);
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+function sceneFileName(scene?: Scene | null): string {
+  const explicitName = String(scene?.name || scene?.title || '').trim();
+  if (explicitName) return explicitName;
+
+  const source = sceneSource(scene);
+  if (!source) return 'untitled';
+
+  try {
+    const url = new URL(source, typeof window !== 'undefined' ? window.location.href : 'https://example.com');
+    const name = url.pathname.split('/').filter(Boolean).pop();
+    return name ? decodeURIComponent(name) : source;
+  } catch {
+    const name = source.split('/').filter(Boolean).pop();
+    return name ? decodeURIComponent(name) : source;
+  }
 }
 
 interface Credit {
@@ -56,29 +96,43 @@ interface Work {
   credits?: Credit[];
 }
 
+interface AudioFile {
+  id: string;
+  filename: string;
+  audioUrl: string;
+  proxiedAudioUrl?: string;
+  workTitle?: string;
+}
+
 interface VideoGridProps {
   works: Work[];
+  audioFiles?: AudioFile[];
 }
 
 /**
  * VideoGrid Component - Horizontal scrolling video grid
  * Migrated from React SceneGrid with core functionality
  */
-export default function VideoGrid({ works }: VideoGridProps) {
+export default function VideoGrid({ works, audioFiles = [] }: VideoGridProps) {
+  const [viewMode, setViewMode] = useState<TheatreViewMode>('video');
   const [currentWorkIndex, setCurrentWorkIndex] = useState(0);
   const [currentSceneIndex, setCurrentSceneIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [currentAudioKey, setCurrentAudioKey] = useState<string | null>(null);
+  const [isAudioPlaying, setIsAudioPlaying] = useState(false);
+  const [audioProgress, setAudioProgress] = useState({ current: 0, duration: 0 });
   const [hoveredScene, setHoveredScene] = useState<{ workIndex: number; sceneIndex: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [isMobile, setIsMobile] = useState(() =>
     typeof window !== 'undefined' ? window.innerWidth <= 768 : false
   );
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const activeVideoRef = useRef<HTMLVideoElement | null>(null);
   const mobileFixedVideoRef = useRef<HTMLVideoElement | null>(null);
   const [showSceneArrows, setShowSceneArrows] = useState(false);
   const [mobilePosterOverlay, setMobilePosterOverlay] = useState<{ visible: boolean; url?: string }>({ visible: false });
   const [generatedThumbnails, setGeneratedThumbnails] = useState<Record<string, string>>({});
-  const [failedPosterUrls, setFailedPosterUrls] = useState<Set<string>>(() => new Set());
+  const [failedR2Posters, setFailedR2Posters] = useState<Set<string>>(() => new Set());
   const generatedThumbsRef = useRef<Record<string, string>>({});
   const failedThumbsRef = useRef<Set<string>>(new Set());
   const inFlightThumbsRef = useRef<Set<string>>(new Set());
@@ -94,6 +148,19 @@ export default function VideoGrid({ works }: VideoGridProps) {
   const mobileUserPausedRef = useRef(false);
   const mobileLoadedSceneKeyRef = useRef<string | null>(null);
   const [desktopPosterOverlay, setDesktopPosterOverlay] = useState<{ key: string | null; url?: string }>({ key: null });
+  const [floatingWindows, setFloatingWindows] = useState<Array<{
+    id: string;
+    src: string;
+    poster?: string;
+    crossOrigin?: 'anonymous';
+    title: string;
+    initialTime: number;
+    autoPlay: boolean;
+    defaultX: number;
+    defaultY: number;
+    zIndex: number;
+  }>>([]);
+  const floatingZRef = useRef(4500);
 
   const cancelPendingMobileAutoplay = useCallback(() => {
     const pendingVideo = mobileAutoplayVideoRef.current;
@@ -112,16 +179,33 @@ export default function VideoGrid({ works }: VideoGridProps) {
   // Parse credits from current work
   const currentWork = works[currentWorkIndex];
   const credits = currentWork?.credits || [];
+  const synopsis = currentWork?.synopsis || String(currentWork?.meta?.['synopsis'] || currentWork?.meta?.['description'] || '').trim() || null;
 
   // Credits visibility - only show when playing
   const creditsVisible = isPlaying;
 
   const resolveScenePoster = useCallback((_workIdx: number, _sceneIdx: number, scene?: Scene | null) => {
-    if (scene?.thumbnail && !failedPosterUrls.has(scene.thumbnail)) return scene.thumbnail;
     const cacheKey = scenePosterCacheKey(scene);
-    if (!cacheKey) return undefined;
-    return generatedThumbnails[cacheKey];
-  }, [failedPosterUrls, generatedThumbnails]);
+    if (cacheKey && generatedThumbnails[cacheKey]) {
+      return generatedThumbnails[cacheKey];
+    }
+    const r2Poster = String(scene?.thumbnail || '').trim();
+    if (r2Poster && !failedR2Posters.has(r2Poster)) {
+      return r2Poster;
+    }
+    return undefined;
+  }, [generatedThumbnails, failedR2Posters]);
+
+  const handleScenePosterError = useCallback((scene?: Scene | null) => {
+    const r2Poster = String(scene?.thumbnail || '').trim();
+    if (!r2Poster) return;
+    setFailedR2Posters((prev) => {
+      if (prev.has(r2Poster)) return prev;
+      const next = new Set(prev);
+      next.add(r2Poster);
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     generatedThumbsRef.current = generatedThumbnails;
@@ -150,8 +234,21 @@ export default function VideoGrid({ works }: VideoGridProps) {
     failedThumbsRef.current = new Set(
       [...failedThumbsRef.current].filter((url) => activeKeys.has(url))
     );
+
+    const activeR2Posters = new Set<string>();
+    for (const work of works) {
+      for (const scene of work.scenes || []) {
+        const thumb = String(scene?.thumbnail || '').trim();
+        if (thumb) activeR2Posters.add(thumb);
+      }
+    }
+    setFailedR2Posters((prev) => {
+      const next = new Set([...prev].filter((url) => activeR2Posters.has(url)));
+      return next.size === prev.size ? prev : next;
+    });
   }, [works]);
 
+  /** Global CORS mode — disabled once any R2 video fails, since CORS isn't on the bucket. */
   const [r2CorsModeEnabled, setR2CorsModeEnabled] = useState(true);
 
   useEffect(() => {
@@ -171,55 +268,48 @@ export default function VideoGrid({ works }: VideoGridProps) {
   }, []);
 
   const shouldUseCrossOriginAnonymous = useCallback((maybeUrl?: string | null) => {
-    // Only force CORS mode for R2. Other third-party hosts might not send ACAO and
-    // would break playback if we set crossOrigin.
     return r2CorsModeEnabled && isR2Url(maybeUrl);
   }, [r2CorsModeEnabled, isR2Url]);
 
-  const handlePossibleCorsPlaybackError = useCallback((el: HTMLVideoElement, url: string) => {
-    // If CORS isn't configured on R2 yet, loading with crossOrigin=anonymous will fail.
-    // Fallback: disable CORS mode globally and reload this element without crossOrigin.
-    if (!shouldUseCrossOriginAnonymous(url)) return;
-    try {
-      const src = el.currentSrc || el.src || url;
-      el.pause();
-      // Remove crossOrigin before reloading.
-      el.crossOrigin = null;
-      el.removeAttribute('crossorigin');
-      el.src = src;
+  /** Load active playback with crossOrigin so Web Audio / VU meter can read R2 audio. */
+  const prepareVideoElementForPlayback = useCallback(
+    (el: HTMLVideoElement, scene?: Scene | null): boolean => {
+      const url = sceneVideoSource(scene);
+      if (!url) return false;
+
+      if (shouldUseCrossOriginAnonymous(url)) {
+        el.crossOrigin = 'anonymous';
+      } else {
+        el.crossOrigin = null;
+        el.removeAttribute('crossorigin');
+      }
+      el.src = url;
       el.load();
-    } catch {
-      // ignore
-    }
-    setR2CorsModeEnabled(false);
-  }, [shouldUseCrossOriginAnonymous]);
+      return true;
+    },
+    [shouldUseCrossOriginAnonymous],
+  );
+
+  const handlePossibleCorsPlaybackError = useCallback(
+    (el: HTMLVideoElement, url: string) => {
+      if (!shouldUseCrossOriginAnonymous(url)) return;
+      try {
+        el.pause();
+        el.crossOrigin = null;
+        el.removeAttribute('crossorigin');
+        el.src = el.currentSrc || el.src || url;
+        el.load();
+      } catch { /* ignore */ }
+      setR2CorsModeEnabled(false);
+    },
+    [shouldUseCrossOriginAnonymous],
+  );
 
   useEffect(() => {
     let cancelled = false;
     const retryTimers: number[] = [];
-    const EXTRACT_TIMEOUT = 8000;
-    const THUMB_MAX_WIDTH = 1280;
-    const JPEG_QUALITY = 0.92;
+    const EXTRACT_TIMEOUT = 5000;
     const isDev = !!(import.meta as any).env?.DEV;
-
-    const extractDataUrlFromVideo = (video: HTMLVideoElement): string | null => {
-      try {
-        const vw = video.videoWidth || 320;
-        const vh = video.videoHeight || 180;
-        const scale = Math.min(1, THUMB_MAX_WIDTH / vw);
-        const cw = Math.max(1, Math.round(vw * scale));
-        const ch = Math.max(1, Math.round(vh * scale));
-        const canvas = document.createElement('canvas');
-        canvas.width = cw;
-        canvas.height = ch;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return null;
-        ctx.drawImage(video, 0, 0, cw, ch);
-        return canvas.toDataURL('image/jpeg', JPEG_QUALITY);
-      } catch {
-        return null;
-      }
-    };
 
     const extractFrameDirect = (videoUrl: string): Promise<string | null> => {
       return new Promise((resolve) => {
@@ -254,10 +344,11 @@ export default function VideoGrid({ works }: VideoGridProps) {
           resolve(result);
         };
 
-        video.addEventListener('loadeddata', () => {
-          const du = extractDataUrlFromVideo(video);
-          finish(du);
-        }, { once: true });
+        const captureFrame = () => {
+          finish(capturePosterDataUrl(video));
+        };
+
+        video.addEventListener('seeked', captureFrame, { once: true });
 
         video.addEventListener('error', () => {
           finish(isCorsAttempt ? '__cors_failure__' : null);
@@ -267,8 +358,16 @@ export default function VideoGrid({ works }: VideoGridProps) {
           finish(isCorsAttempt ? '__cors_failure__' : null);
         }, EXTRACT_TIMEOUT);
 
-        video.addEventListener('loadeddata', () => clearTimeout(timer), { once: true });
+        video.addEventListener('seeked', () => clearTimeout(timer), { once: true });
         video.addEventListener('error', () => clearTimeout(timer), { once: true });
+
+        video.addEventListener('loadeddata', () => {
+          try {
+            video.currentTime = 0.05;
+          } catch {
+            captureFrame();
+          }
+        }, { once: true });
 
         video.src = videoUrl;
         video.load();
@@ -329,29 +428,36 @@ export default function VideoGrid({ works }: VideoGridProps) {
     const run = async () => {
       const tasks: Array<{ key: string; url: string }> = [];
 
+      const hasDisplayPoster = (scene?: Scene | null) => {
+        const cacheKey = scenePosterCacheKey(scene);
+        if (cacheKey && generatedThumbsRef.current[cacheKey]) return true;
+        const r2Poster = String(scene?.thumbnail || '').trim();
+        return !!(r2Poster && !failedR2Posters.has(r2Poster));
+      };
+
       const pushTask = (workIdx: number, sceneIdx: number) => {
         const scene = works[workIdx]?.scenes?.[sceneIdx];
-        if (!scene) return;
-        if (scene.thumbnail && !failedPosterUrls.has(scene.thumbnail)) return;
+        if (!scene || hasDisplayPoster(scene)) return;
         const cacheKey = scenePosterCacheKey(scene);
         if (!cacheKey) return;
-        if (generatedThumbsRef.current[cacheKey]) return;
         if (failedThumbsRef.current.has(cacheKey)) return;
         if (inFlightThumbsRef.current.has(cacheKey)) return;
         if (tasks.some((t) => t.key === cacheKey)) return;
-        const url = scene.proxiedVideoUrl ?? scene.videoUrl;
+        const url = sceneVideoSource(scene);
         if (!url) return;
         tasks.push({ key: cacheKey, url });
       };
 
-      // Extract only nearby/visible content; avoid global bursts.
+      // Posters: first scene per work + current row (capped) + hover — never every scene at once.
       if (isMobile && !isPlaying) {
         works.forEach((_, workIdx) => pushTask(workIdx, 0));
       }
       if (!isMobile && !isPlaying) {
         works.forEach((_, workIdx) => pushTask(workIdx, 0));
-        const currentScenes = (works[currentWorkIndex]?.scenes || []).slice(0, 12);
-        currentScenes.forEach((_, sceneIdx) => pushTask(currentWorkIndex, sceneIdx));
+        const currentScenes = works[currentWorkIndex]?.scenes || [];
+        for (let sceneIdx = 0; sceneIdx < Math.min(currentScenes.length, 6); sceneIdx++) {
+          pushTask(currentWorkIndex, sceneIdx);
+        }
       }
       if (isPlaying) {
         pushTask(currentWorkIndex, currentSceneIndex);
@@ -367,7 +473,7 @@ export default function VideoGrid({ works }: VideoGridProps) {
         pushTask(hoveredScene.workIndex, hoveredScene.sceneIndex);
       }
 
-      const concurrency = isMobile ? 2 : 3;
+      const concurrency = 2;
       let cursor = 0;
       const workers = new Array(concurrency).fill(0).map(async () => {
         while (!cancelled) {
@@ -378,10 +484,7 @@ export default function VideoGrid({ works }: VideoGridProps) {
           let dataUrl: string | null = null;
 
           const direct = await extractWithRetry(task.url);
-          if (direct === '__cors_failure__') {
-            // Keep playback fallback, but do not permanently block extraction attempts.
-            setR2CorsModeEnabled(false);
-          } else {
+          if (direct !== '__cors_failure__') {
             dataUrl = direct;
           }
 
@@ -411,7 +514,7 @@ export default function VideoGrid({ works }: VideoGridProps) {
       cancelled = true;
       retryTimers.forEach((t) => clearTimeout(t));
     };
-  }, [works, currentWorkIndex, currentSceneIndex, isMobile, isPlaying, hoveredScene, failedPosterUrls, shouldUseCrossOriginAnonymous, isR2Url]);
+  }, [works, currentWorkIndex, currentSceneIndex, isMobile, isPlaying, hoveredScene, shouldUseCrossOriginAnonymous, isR2Url]);
 
   useEffect(() => {
     const container = document.querySelector('.viewer-container');
@@ -559,6 +662,139 @@ export default function VideoGrid({ works }: VideoGridProps) {
     } catch {}
   }, [cancelPendingMobileAutoplay]);
 
+  const stopPlaylistAudio = useCallback((resetCurrent = false) => {
+    const audio = audioRef.current;
+    if (audio) {
+      try {
+        audio.pause();
+        if (resetCurrent) {
+          audio.removeAttribute('src');
+          audio.load();
+        }
+      } catch {}
+    }
+    setIsAudioPlaying(false);
+    if (resetCurrent) setCurrentAudioKey(null);
+  }, []);
+
+  const switchTheatreView = useCallback((nextMode: TheatreViewMode) => {
+    if (nextMode === viewMode) return;
+    if (nextMode === 'playlist' && !THEATRE_FILES_VIEW_ENABLED) return;
+
+    if (nextMode === 'playlist') {
+      forcePauseMobileVideo();
+      setIsPlaying(false);
+      stopAllVideosExcept(null, null, false);
+      setDesktopPosterOverlay({ key: null });
+    } else {
+      stopPlaylistAudio(true);
+    }
+
+    setViewMode(nextMode);
+  }, [forcePauseMobileVideo, stopAllVideosExcept, stopPlaylistAudio, viewMode]);
+
+  const handlePlaylistPlay = useCallback(async (fileIdx: number) => {
+    const file = audioFiles[fileIdx];
+    const source = audioFileSource(file);
+    if (!source) return;
+
+    const key = file.id || `audio-${fileIdx}`;
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    if (currentAudioKey === key) {
+      if (audio.paused) {
+        try {
+          await audio.play();
+          setIsAudioPlaying(true);
+        } catch (error) {
+          console.error('Error playing playlist audio:', error);
+        }
+      } else {
+        audio.pause();
+        setIsAudioPlaying(false);
+      }
+      return;
+    }
+
+    try {
+      audio.pause();
+      audio.src = source;
+      audio.load();
+      setCurrentAudioKey(key);
+      await audio.play();
+      setIsAudioPlaying(true);
+    } catch (error) {
+      console.error('Error playing playlist audio:', error);
+      setIsAudioPlaying(false);
+    }
+  }, [audioFiles, currentAudioKey]);
+
+  const currentAudioIndex = useMemo(() => {
+    if (!currentAudioKey) return -1;
+    return audioFiles.findIndex((file, fileIdx) => (file.id || `audio-${fileIdx}`) === currentAudioKey);
+  }, [audioFiles, currentAudioKey]);
+
+  const currentAudioFile = currentAudioIndex >= 0 ? audioFiles[currentAudioIndex] : null;
+
+  const handleTransportPlayPause = useCallback(() => {
+    if (currentAudioIndex >= 0) {
+      void handlePlaylistPlay(currentAudioIndex);
+      return;
+    }
+    if (audioFiles.length > 0) void handlePlaylistPlay(0);
+  }, [audioFiles.length, currentAudioIndex, handlePlaylistPlay]);
+
+  const playAdjacentAudio = useCallback((delta: number) => {
+    if (audioFiles.length === 0) return;
+    let nextIdx = currentAudioIndex;
+    if (nextIdx < 0) {
+      nextIdx = delta < 0 ? audioFiles.length - 1 : 0;
+    } else {
+      nextIdx = (nextIdx + delta + audioFiles.length) % audioFiles.length;
+    }
+    void handlePlaylistPlay(nextIdx);
+  }, [audioFiles.length, currentAudioIndex, handlePlaylistPlay]);
+
+  const handleAudioProgressSeek = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    const audio = audioRef.current;
+    const bar = e.currentTarget;
+    if (!audio || !Number.isFinite(audio.duration) || audio.duration <= 0) return;
+    const rect = bar.getBoundingClientRect();
+    const ratio = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+    const nextTime = ratio * audio.duration;
+    try {
+      audio.currentTime = nextTime;
+      setAudioProgress({ current: nextTime, duration: audio.duration });
+    } catch {
+      // ignore seek errors
+    }
+  }, []);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const syncProgress = () => {
+      setAudioProgress({
+        current: audio.currentTime || 0,
+        duration: Number.isFinite(audio.duration) ? audio.duration : 0,
+      });
+    };
+
+    audio.addEventListener('timeupdate', syncProgress);
+    audio.addEventListener('loadedmetadata', syncProgress);
+    audio.addEventListener('durationchange', syncProgress);
+    audio.addEventListener('seeked', syncProgress);
+
+    return () => {
+      audio.removeEventListener('timeupdate', syncProgress);
+      audio.removeEventListener('loadedmetadata', syncProgress);
+      audio.removeEventListener('durationchange', syncProgress);
+      audio.removeEventListener('seeked', syncProgress);
+    };
+  }, [viewMode, currentAudioKey]);
+
   // Play the specified video — always restarts from beginning
   const playVideo = useCallback(async (workIdx: number, sceneIdx: number, fromUserGesture = false) => {
     // Increment generation to cancel any pending play from a previous call
@@ -580,15 +816,8 @@ export default function VideoGrid({ works }: VideoGridProps) {
     
     if (!videoElement) return;
 
-    // Restore src if it was removed by lazy loading
-    let needsLoad = false;
-    if (!videoElement.hasAttribute('src') || !videoElement.src || videoElement.src === window.location.href) {
-      const scene = works[workIdx]?.scenes?.[sceneIdx];
-      if (scene) {
-        videoElement.src = scene.proxiedVideoUrl ?? scene.videoUrl;
-        needsLoad = true;
-      }
-    }
+    const scene = works[workIdx]?.scenes?.[sceneIdx];
+    prepareVideoElementForPlayback(videoElement, scene);
 
     // Always restart from the beginning
     videoElement.currentTime = 0;
@@ -610,6 +839,7 @@ export default function VideoGrid({ works }: VideoGridProps) {
           return;
         }
         activeVideoRef.current = videoElement;
+        forceConnectVideoToVuMeter(videoElement);
       } catch (error) {
         console.error('Error playing video:', error);
         // If unmuted play fails due to autoplay policy, try muted first
@@ -622,6 +852,7 @@ export default function VideoGrid({ works }: VideoGridProps) {
             return;
           }
           activeVideoRef.current = videoElement;
+          forceConnectVideoToVuMeter(videoElement);
           if (fromUserGesture) {
             // Unmute and restart playback to enable audio
             videoElement.muted = false;
@@ -632,6 +863,7 @@ export default function VideoGrid({ works }: VideoGridProps) {
               try { videoElement.pause(); } catch {}
               return;
             }
+            forceConnectVideoToVuMeter(videoElement);
           }
         } catch (e2) {
           console.error('Error playing video (muted fallback):', e2);
@@ -642,9 +874,7 @@ export default function VideoGrid({ works }: VideoGridProps) {
     // If this call comes from a direct user gesture (click/tap), attempt play immediately
     // to preserve gesture context and allow unmuted playback in browsers with autoplay rules.
     if (fromUserGesture) {
-      if (needsLoad) {
-        videoElement.load();
-      }
+      // prepareVideoElementForPlayback already called load() — don't reload
       await doPlay();
     }
     // If already buffered enough, play immediately (readyState 2+ = has current frame)
@@ -663,7 +893,7 @@ export default function VideoGrid({ works }: VideoGridProps) {
       
       videoElement.addEventListener('canplay', handleCanPlay);
       
-      // Safety timeout: force play after 3s even if canplay hasn't fired
+      // Safety timeout: force play after 1s even if canplay hasn't fired
       const timeoutId = window.setTimeout(() => {
         videoElement.removeEventListener('canplay', handleCanPlay);
         if (pendingCanPlayRef.current?.el === videoElement) {
@@ -671,14 +901,11 @@ export default function VideoGrid({ works }: VideoGridProps) {
         }
         console.warn('[VideoGrid] canplay timeout, forcing play');
         doPlay();
-      }, 3000);
+      }, 1000);
       
       pendingCanPlayRef.current = { el: videoElement, handler: handleCanPlay, timeout: timeoutId };
-      
-      // Kick the browser to start loading (needed for preload="none" videos)
-      videoElement.load();
     }
-  }, [works, stopAllVideosExcept]);
+  }, [works, stopAllVideosExcept, prepareVideoElementForPlayback]);
 
   // Handle scene click — always restart from beginning, only one video at a time
   const handleSceneClick = useCallback((workIdx: number, sceneIdx: number) => {
@@ -702,7 +929,7 @@ export default function VideoGrid({ works }: VideoGridProps) {
     setCurrentWorkIndex(workIdx);
     setCurrentSceneIndex(sceneIdx);
     setIsPlaying(true);
-    
+
     // Play immediately within user gesture context
     playVideo(workIdx, sceneIdx, true);
     
@@ -712,6 +939,79 @@ export default function VideoGrid({ works }: VideoGridProps) {
       sceneElement?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
     }, 50);
   }, [currentWorkIndex, currentSceneIndex, isPlaying, stopAllVideosExcept, playVideo, isMobile, works, resolveScenePoster]);
+
+  const closeFloatingWindow = useCallback((id: string) => {
+    setFloatingWindows((prev) => prev.filter((w) => w.id !== id));
+  }, []);
+
+  const focusFloatingWindow = useCallback((id: string) => {
+    const nextZ = floatingZRef.current++;
+    setFloatingWindows((prev) =>
+      prev.map((w) => (w.id === id ? { ...w, zIndex: nextZ } : w)),
+    );
+  }, []);
+
+  const openFloatingVideo = useCallback(
+    (workIdx: number, sceneIdx: number, e: React.MouseEvent) => {
+      e.stopPropagation();
+      const work = works[workIdx];
+      const scene = work?.scenes?.[sceneIdx];
+      if (!scene) return;
+
+      const src = sceneSource(scene);
+      if (!src) return;
+
+      const selector = `[data-work-index="${workIdx}"][data-scene-index="${sceneIdx}"] video`;
+      const gridVideo = document.querySelector(selector) as HTMLVideoElement | null;
+      const initialTime = gridVideo?.currentTime ?? 0;
+      const autoPlay = !!(gridVideo && !gridVideo.paused && !gridVideo.ended);
+
+      if (gridVideo && !gridVideo.paused) {
+        try {
+          gridVideo.pause();
+        } catch {
+          /* ignore */
+        }
+      }
+
+      if (workIdx === currentWorkIndex && sceneIdx === currentSceneIndex && isPlaying) {
+        setIsPlaying(false);
+        stopAllVideosExcept(null, null, false);
+      }
+
+      const offset = floatingWindows.length * 28;
+      const id = `float-${workIdx}-${sceneIdx}-${Date.now()}`;
+      const title = sceneFileName(scene) || work?.title || 'Video';
+      const maxX = typeof window !== 'undefined' ? Math.max(72, window.innerWidth - 520) : 72;
+      const maxY = typeof window !== 'undefined' ? Math.max(96, window.innerHeight - 320) : 96;
+
+      setFloatingWindows((prev) => [
+        ...prev,
+        {
+          id,
+          src,
+          poster: resolveScenePoster(workIdx, sceneIdx, scene),
+          crossOrigin: shouldUseCrossOriginAnonymous(src) ? 'anonymous' : undefined,
+          title,
+          initialTime,
+          autoPlay,
+          defaultX: Math.min(maxX, 72 + offset),
+          defaultY: Math.min(maxY, 96 + offset),
+          zIndex: floatingZRef.current++,
+        },
+      ]);
+    },
+    [
+      works,
+      floatingWindows.length,
+      resolveScenePoster,
+      shouldUseCrossOriginAnonymous,
+      currentWorkIndex,
+      currentSceneIndex,
+      isPlaying,
+      stopAllVideosExcept,
+    ],
+  );
 
   // Handle play/pause state — only stop videos, never start a second play here
   // (playVideo is called directly from handleSceneClick within user gesture context)
@@ -723,6 +1023,7 @@ export default function VideoGrid({ works }: VideoGridProps) {
       // to guarantee no orphan audio survives unmount / state changes.
       const allVideos = document.querySelectorAll('video') as NodeListOf<HTMLVideoElement>;
       allVideos.forEach((v) => {
+        if (v.closest('.floating-video-window')) return;
         try {
           if (!v.paused) {
             v.pause();
@@ -904,10 +1205,9 @@ export default function VideoGrid({ works }: VideoGridProps) {
     // Pause + clear old source before loading new one
     video.pause();
     if (poster) video.poster = poster;
-    video.src = newSrc;
+    prepareVideoElementForPlayback(video, scene);
     video.currentTime = 0;
     video.preload = 'auto';
-    video.load();
 
     let cancelled = false;
 
@@ -972,7 +1272,7 @@ export default function VideoGrid({ works }: VideoGridProps) {
       video.removeEventListener('playing', handlePlaying);
       cancelPendingMobileAutoplay();
     };
-  }, [isMobile, isPlaying, currentWorkIndex, currentSceneIndex, works, resolveScenePoster, cancelPendingMobileAutoplay]);
+  }, [isMobile, isPlaying, currentWorkIndex, currentSceneIndex, works, resolveScenePoster, cancelPendingMobileAutoplay, prepareVideoElementForPlayback]);
 
   // Inject a <link rel="preload" as="video"> in <head> for the active video on mobile.
   // This lets Safari's speculative loader start fetching before the <video> src is set.
@@ -1105,6 +1405,194 @@ export default function VideoGrid({ works }: VideoGridProps) {
     };
   }, [works]);
 
+  useEffect(() => {
+    return () => {
+      const audio = audioRef.current;
+      if (!audio) return;
+      try {
+        audio.pause();
+        audio.removeAttribute('src');
+        audio.load();
+      } catch {}
+    };
+  }, []);
+
+  const renderViewSwitch = () => {
+    if (isMobile || !THEATRE_FILES_VIEW_ENABLED) return null;
+    return (
+      <div className="theatre-view-switch" aria-label="theatre view">
+        <button
+          type="button"
+          className={viewMode === 'video' ? 'active' : ''}
+          onClick={() => switchTheatreView('video')}
+        >
+          videos
+        </button>
+        <span aria-hidden="true">/</span>
+        <button
+          type="button"
+          className={viewMode === 'playlist' ? 'active' : ''}
+          onClick={() => switchTheatreView('playlist')}
+        >
+          files
+        </button>
+      </div>
+    );
+  };
+
+  useEffect(() => {
+    if ((isMobile || !THEATRE_FILES_VIEW_ENABLED) && viewMode !== 'video') {
+      stopPlaylistAudio(true);
+      setViewMode('video');
+    }
+  }, [isMobile, viewMode, stopPlaylistAudio]);
+
+  if (THEATRE_FILES_VIEW_ENABLED && !isMobile && viewMode === 'playlist') {
+    const transportFileName = currentAudioFile
+      ? (currentAudioFile.filename || sceneFileName({
+          id: currentAudioFile.id,
+          videoUrl: currentAudioFile.audioUrl,
+          proxiedVideoUrl: currentAudioFile.proxiedAudioUrl,
+        }))
+      : 'select a file';
+    const transportWorkTitle = currentAudioFile?.workTitle?.trim() || '';
+    const progressRatio = audioProgress.duration > 0
+      ? Math.min(1, audioProgress.current / audioProgress.duration)
+      : 0;
+
+    return (
+      <div className="scene-grid playlist-mode">
+        {renderViewSwitch()}
+        <div className="playlist-panel" role="region" aria-label="sound files playlist">
+          <div className="playlist-header" role="row">
+            <span className="playlist-cell playlist-control-cell" aria-hidden="true" />
+            <span className="playlist-cell playlist-file-cell">filename</span>
+            <span className="playlist-cell playlist-work-cell">work</span>
+          </div>
+          {audioFiles.length === 0 ? (
+            <div className="playlist-empty">
+              no audio files found
+            </div>
+          ) : (
+            audioFiles.map((file, fileIdx) => {
+              const key = file.id || `audio-${fileIdx}`;
+              const isCurrent = currentAudioKey === key;
+              const isRowPlaying = isCurrent && isAudioPlaying;
+              const fileName = file.filename || sceneFileName({ id: key, videoUrl: file.audioUrl, proxiedVideoUrl: file.proxiedAudioUrl });
+
+              return (
+                <div
+                  className={`playlist-row ${isCurrent ? 'active' : ''}`}
+                  role="row"
+                  key={key}
+                >
+                  <span className="playlist-cell playlist-control-cell">
+                    <button
+                      type="button"
+                      className={`playlist-play-button play-glyph-button ${isRowPlaying ? 'playing' : ''}`}
+                      onClick={() => handlePlaylistPlay(fileIdx)}
+                      aria-label={`${isRowPlaying ? 'Pause' : 'Play'} ${fileName}`}
+                    >
+                      {isRowPlaying ? <PauseGlyph /> : <PlayGlyph />}
+                    </button>
+                  </span>
+                  <span className="playlist-cell playlist-file-cell" title={fileName}>
+                    {fileName}
+                  </span>
+                  <span className="playlist-cell playlist-work-cell" title={file.workTitle || ''}>
+                    {file.workTitle || ''}
+                  </span>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        <footer className="playlist-transport" aria-label="Playback controls">
+          <div className="playlist-transport-controls">
+            <button
+              type="button"
+              className="playlist-transport-btn"
+              onClick={() => playAdjacentAudio(-1)}
+              disabled={audioFiles.length === 0}
+              aria-label="Previous file"
+            >
+              ‹
+            </button>
+            <button
+              type="button"
+              className="playlist-transport-btn playlist-transport-btn-play"
+              onClick={handleTransportPlayPause}
+              disabled={audioFiles.length === 0}
+              aria-label={isAudioPlaying ? 'Pause' : 'Play'}
+            >
+              {isAudioPlaying ? '❚❚' : '▶'}
+            </button>
+            <button
+              type="button"
+              className="playlist-transport-btn"
+              onClick={() => playAdjacentAudio(1)}
+              disabled={audioFiles.length === 0}
+              aria-label="Next file"
+            >
+              ›
+            </button>
+          </div>
+
+          <div className="playlist-transport-meta">
+            <span className="playlist-transport-title" title={transportFileName}>
+              {transportFileName}
+            </span>
+            {transportWorkTitle ? (
+              <span className="playlist-transport-work" title={transportWorkTitle}>
+                {transportWorkTitle}
+              </span>
+            ) : null}
+          </div>
+
+          <div className="playlist-transport-progress">
+            <span className="playlist-transport-time" aria-hidden="true">
+              {formatAudioTime(audioProgress.current)}
+            </span>
+            <div
+              className="playlist-transport-bar"
+              role="slider"
+              aria-label="Playback position"
+              aria-valuemin={0}
+              aria-valuemax={Math.floor(audioProgress.duration) || 0}
+              aria-valuenow={Math.floor(audioProgress.current)}
+              onClick={handleAudioProgressSeek}
+            >
+              <div
+                className="playlist-transport-bar-fill"
+                style={{ width: `${progressRatio * 100}%` }}
+              />
+            </div>
+            <span className="playlist-transport-time" aria-hidden="true">
+              {formatAudioTime(audioProgress.duration)}
+            </span>
+          </div>
+        </footer>
+
+        <audio
+          ref={audioRef}
+          preload="none"
+          onPlay={() => setIsAudioPlaying(true)}
+          onPause={() => setIsAudioPlaying(false)}
+          onEnded={() => {
+            setIsAudioPlaying(false);
+            if (currentAudioIndex >= 0 && currentAudioIndex < audioFiles.length - 1) {
+              void handlePlaylistPlay(currentAudioIndex + 1);
+              return;
+            }
+            setCurrentAudioKey(null);
+            setAudioProgress({ current: 0, duration: 0 });
+          }}
+        />
+      </div>
+    );
+  }
+
   if (isMobile) {
     // Mobile: vertical list layout
     return (
@@ -1211,7 +1699,12 @@ export default function VideoGrid({ works }: VideoGridProps) {
               >
                 <video
                   ref={mobileFixedVideoRef}
-                  crossOrigin={shouldUseCrossOriginAnonymous(works[currentWorkIndex]?.scenes?.[currentSceneIndex]?.proxiedVideoUrl ?? works[currentWorkIndex]?.scenes?.[currentSceneIndex]?.videoUrl) ? 'anonymous' : undefined}
+                  crossOrigin={shouldUseCrossOriginAnonymous(
+                    works[currentWorkIndex]?.scenes?.[currentSceneIndex]?.proxiedVideoUrl ??
+                      works[currentWorkIndex]?.scenes?.[currentSceneIndex]?.videoUrl,
+                  )
+                    ? 'anonymous'
+                    : undefined}
                   poster={resolveScenePoster(currentWorkIndex, currentSceneIndex, works[currentWorkIndex]?.scenes?.[currentSceneIndex])}
                   loop
                   playsInline
@@ -1220,8 +1713,13 @@ export default function VideoGrid({ works }: VideoGridProps) {
                   disablePictureInPicture
                   controlsList="nodownload noplaybackrate noremoteplayback nofullscreen"
                   onError={(e) => {
-                    const url = works[currentWorkIndex]?.scenes?.[currentSceneIndex]?.proxiedVideoUrl ?? works[currentWorkIndex]?.scenes?.[currentSceneIndex]?.videoUrl ?? '';
+                    const url = works[currentWorkIndex]?.scenes?.[currentSceneIndex]?.proxiedVideoUrl ??
+                      works[currentWorkIndex]?.scenes?.[currentSceneIndex]?.videoUrl;
                     handlePossibleCorsPlaybackError(e.currentTarget, url);
+                  }}
+                  onPlaying={(e) => {
+                    activeVideoRef.current = e.currentTarget;
+                    forceConnectVideoToVuMeter(e.currentTarget);
                   }}
                   onClick={(e) => {
                     e.stopPropagation();
@@ -1296,6 +1794,7 @@ export default function VideoGrid({ works }: VideoGridProps) {
               isVisible={creditsVisible && isMobile}
               title={currentWork?.title || ''}
               credits={credits}
+              synopsis={synopsis}
             />
           </div>
         )}
@@ -1328,31 +1827,17 @@ export default function VideoGrid({ works }: VideoGridProps) {
                           if (poster) {
                             return (
                               <img
-                                className="mobile-video"
+                                className="mobile-video scene-poster-image"
                                 src={poster}
                                 alt={work.title}
                                 loading={workIdx < 2 ? 'eager' : 'lazy'}
                                 decoding="async"
-                                onError={() => {
-                                  setFailedPosterUrls((prev) => {
-                                    if (prev.has(poster)) return prev;
-                                    const next = new Set(prev);
-                                    next.add(poster);
-                                    return next;
-                                  });
-                                }}
+                                onError={() => handleScenePosterError(firstScene)}
                               />
                             );
                           }
                           return (
-                            <video
-                              className="mobile-video"
-                              src={firstScene.proxiedVideoUrl ?? firstScene.videoUrl}
-                              muted
-                              playsInline
-                              preload="metadata"
-                              aria-label={work.title}
-                            />
+                            <div className="scene-poster-placeholder mobile-video" aria-hidden="true" />
                           );
                         })()
                       ) : (
@@ -1387,6 +1872,7 @@ export default function VideoGrid({ works }: VideoGridProps) {
   // Desktop: horizontal scrolling grid
   return (
     <>
+      {renderViewSwitch()}
       <div ref={containerRef} className="scene-grid">
         <div className="works-container">
           {works.map((work, workIdx) => (
@@ -1395,24 +1881,27 @@ export default function VideoGrid({ works }: VideoGridProps) {
               className={`work-row visible-work ${isPlaying && workIdx === currentWorkIndex ? 'active-work current-work playing' : ''} ${isPlaying && workIdx === currentWorkIndex + 1 ? 'next-work' : ''}`}
               data-work-index={workIdx}
             >
-              {/* Flechas de navegación fuera del scenes-container para que no se desplacen */}
-              <button
-                className={`hscroll-btn hscroll-left ${scrollVisibility[workIdx]?.left ? 'visible' : ''}`}
-                onClick={() => scrollHorizontal(workIdx, 'left')}
-                aria-label="Scroll left"
-              >
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="square" strokeLinejoin="miter"><path d="M15 18l-6-6 6-6"/></svg>
-              </button>
-              
-              <button
-                className={`hscroll-btn hscroll-right ${scrollVisibility[workIdx]?.right ? 'visible' : ''}`}
-                onClick={() => scrollHorizontal(workIdx, 'right')}
-                aria-label="Scroll right"
-              >
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="square" strokeLinejoin="miter"><path d="M9 18l6-6-6-6"/></svg>
-              </button>
+              <div className="work-row-header">
+                <h2 className="work-row-heading theatre-ui-label">{work.title}</h2>
+              </div>
+              <div className="work-row-track">
+                <button
+                  className={`hscroll-btn hscroll-left ${scrollVisibility[workIdx]?.left ? 'visible' : ''}`}
+                  onClick={() => scrollHorizontal(workIdx, 'left')}
+                  aria-label="Scroll left"
+                >
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="square" strokeLinejoin="miter"><path d="M15 18l-6-6 6-6"/></svg>
+                </button>
 
-              <div className="scenes-container" data-work-index={workIdx}>
+                <button
+                  className={`hscroll-btn hscroll-right ${scrollVisibility[workIdx]?.right ? 'visible' : ''}`}
+                  onClick={() => scrollHorizontal(workIdx, 'right')}
+                  aria-label="Scroll right"
+                >
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="square" strokeLinejoin="miter"><path d="M9 18l6-6-6-6"/></svg>
+                </button>
+
+                <div className="scenes-container" data-work-index={workIdx}>
                 {work.scenes.map((scene, sceneIdx) => (
                   <div
                     key={scene.id}
@@ -1429,32 +1918,61 @@ export default function VideoGrid({ works }: VideoGridProps) {
                     onMouseEnter={() => setHoveredScene({ workIndex: workIdx, sceneIndex: sceneIdx })}
                     onMouseLeave={() => setHoveredScene(null)}
                   >
-                    <video
-                      src={
-                        Math.abs(workIdx - currentWorkIndex) <= 1 || sceneIdx === 0
-                          ? (scene.proxiedVideoUrl ?? scene.videoUrl)
-                          : undefined
-                      }
-                      crossOrigin={shouldUseCrossOriginAnonymous(scene.proxiedVideoUrl ?? scene.videoUrl) ? 'anonymous' : undefined}
-                      poster={resolveScenePoster(workIdx, sceneIdx, scene)}
-                      playsInline
-                      preload={
-                        workIdx === currentWorkIndex && sceneIdx === currentSceneIndex ? 'auto' :
-                        workIdx === currentWorkIndex && Math.abs(sceneIdx - currentSceneIndex) <= 1 ? 'metadata' :
-                        sceneIdx === 0 ? 'metadata' :
-                        Math.abs(workIdx - currentWorkIndex) <= 1 ? 'metadata' :
-                        'none'
-                      }
-                      loop
-                      onError={(e) => {
-                        const url = scene.proxiedVideoUrl ?? scene.videoUrl;
-                        handlePossibleCorsPlaybackError(e.currentTarget, url);
-                      }}
-                      onPlaying={() => {
-                        const key = `${workIdx}:${sceneIdx}`;
-                        setDesktopPosterOverlay((prev) => (prev.key === key ? { key: null } : prev));
-                      }}
-                    />
+                    {(() => {
+                      const isActiveScene =
+                        isPlaying && workIdx === currentWorkIndex && sceneIdx === currentSceneIndex;
+                      const posterUrl = resolveScenePoster(workIdx, sceneIdx, scene);
+                      return (
+                        <>
+                          {!isActiveScene && (
+                            posterUrl ? (
+                              <img
+                                className="scene-poster-image"
+                                src={posterUrl}
+                                alt=""
+                                decoding="async"
+                                loading="lazy"
+                                onError={() => handleScenePosterError(scene)}
+                              />
+                            ) : (
+                              <div className="scene-poster-placeholder" aria-hidden="true" />
+                            )
+                          )}
+                          <video
+                            className="scene-video"
+                            src={
+                              Math.abs(workIdx - currentWorkIndex) <= 1 || sceneIdx === 0
+                                ? (scene.proxiedVideoUrl ?? scene.videoUrl)
+                                : undefined
+                            }
+                            crossOrigin={shouldUseCrossOriginAnonymous(scene.proxiedVideoUrl ?? scene.videoUrl) ? 'anonymous' : undefined}
+                            poster={posterUrl}
+                            playsInline
+                            preload={
+                              workIdx === currentWorkIndex && sceneIdx === currentSceneIndex ? 'auto' :
+                              workIdx === currentWorkIndex && Math.abs(sceneIdx - currentSceneIndex) <= 1 ? 'metadata' :
+                              sceneIdx === 0 ? 'metadata' :
+                              Math.abs(workIdx - currentWorkIndex) <= 1 ? 'metadata' :
+                              'none'
+                            }
+                            loop
+                            onError={(e) => {
+                              if (!isActiveScene) return;
+                              const url = scene.proxiedVideoUrl ?? scene.videoUrl;
+                              handlePossibleCorsPlaybackError(e.currentTarget, url);
+                            }}
+                            onPlaying={(e) => {
+                              const key = `${workIdx}:${sceneIdx}`;
+                              setDesktopPosterOverlay((prev) =>
+                                prev.key === key ? { key: null } : prev,
+                              );
+                              activeVideoRef.current = e.currentTarget;
+                              forceConnectVideoToVuMeter(e.currentTarget);
+                            }}
+                          />
+                        </>
+                      );
+                    })()}
                     {desktopPosterOverlay.key === `${workIdx}:${sceneIdx}` && desktopPosterOverlay.url && (
                       <img
                         className="desktop-poster-overlay"
@@ -1463,6 +1981,7 @@ export default function VideoGrid({ works }: VideoGridProps) {
                         aria-hidden="true"
                       />
                     )}
+                    <VideoPopoutButton onClick={(e) => openFloatingVideo(workIdx, sceneIdx, e)} />
                     <button
                       type="button"
                       className={`play-pause-button${isPlaying && workIdx === currentWorkIndex && sceneIdx === currentSceneIndex ? '' : ' play-glyph-button'}`}
@@ -1476,17 +1995,37 @@ export default function VideoGrid({ works }: VideoGridProps) {
                     </button>
                   </div>
                 ))}
+                </div>
               </div>
             </div>
           ))}
         </div>
       </div>
 
+      {floatingWindows.map((entry) => (
+        <FloatingVideoWindow
+          key={entry.id}
+          src={entry.src}
+          poster={entry.poster}
+          crossOrigin={entry.crossOrigin}
+          title={entry.title}
+          initialTime={entry.initialTime}
+          autoPlay={entry.autoPlay}
+          defaultX={entry.defaultX}
+          defaultY={entry.defaultY}
+          zIndex={entry.zIndex}
+          onClose={() => closeFloatingWindow(entry.id)}
+          onFocus={() => focusFloatingWindow(entry.id)}
+          onVideoError={handlePossibleCorsPlaybackError}
+        />
+      ))}
+
       {/* Credits Panel */}
       <CreditsPanel
         isVisible={creditsVisible && !isMobile}
         title={currentWork?.title || ''}
         credits={credits}
+        synopsis={synopsis}
         videoRef={activeVideoRef}
         currentWorkIndex={currentWorkIndex}
         currentSceneIndex={currentSceneIndex}

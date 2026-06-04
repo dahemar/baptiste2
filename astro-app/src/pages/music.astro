@@ -1,141 +1,35 @@
 ---
 export const prerender = false;
+
+export const headers = {
+  'Cache-Control': 'public, max-age=0, s-maxage=120, stale-while-revalidate=600',
+};
+
 import '../styles/music.css';
-import { loadMusicData } from '../utils/sectionContentManager';
-import { batchFetchBandcampCovers } from '../utils/bandcampScraper';
+import { loadMusicPageModel } from '../utils/musicPageData';
 
 const images = import.meta.glob('../assets/music/*.{jpg,jpeg,png,webp}', {
   eager: true,
   query: '?url',
-  import: 'default'
+  import: 'default',
 });
+
+const localImages: Record<string, string> = {};
+for (const [assetPath, src] of Object.entries(images)) {
+  const key = assetPath.split('/').pop() || '';
+  if (key) localImages[key] = typeof src === 'string' ? src : '';
+}
 
 let allReleasesUrl = 'https://www.discogs.com/fr/artist/5751087-Apulati-Bien?superFilter=Releases';
-let releases = [];
+let projects = [];
+
 try {
-  const data = await loadMusicData();
-  allReleasesUrl = data.allReleasesUrl || allReleasesUrl;
-  releases = data.releases || [];
+  const model = await loadMusicPageModel(localImages);
+  allReleasesUrl = model.allReleasesUrl || allReleasesUrl;
+  projects = model.projects;
 } catch {
-  releases = [];
+  projects = [];
 }
-
-const normalizeKey = (path: string) => {
-  return path.split('/').pop() || '';
-};
-
-interface MusicEntry {
-  key: string;
-  src: string;
-  title: string;
-  format: string;
-  year: string;
-  type: string;
-  url: string;
-  id: string;
-  sortOrder: string;
-}
-
-const matchedIds = new Set<string>();
-
-// Priority 1: user-specified cover_url (highest priority)
-const externalEntries: MusicEntry[] = releases
-  .filter((item) => !!item.coverUrl)
-  .map((item) => {
-    matchedIds.add(item.id);
-    return {
-      key: item.coverKey || item.id,
-      src: item.coverUrl || '',
-      title: item.title,
-      format: item.format,
-      year: item.year,
-      type: (item.type || 'other').toLowerCase(),
-      url: item.url || allReleasesUrl,
-      id: item.id,
-      sortOrder: item.sortOrder,
-    };
-  });
-
-// Priority 2: Bandcamp automatic scraping (medium priority)
-const bandcampReleases = releases.filter((item) => {
-  if (!item.url || matchedIds.has(item.id)) return false;
-  try {
-    return new URL(item.url).hostname.endsWith('.bandcamp.com');
-  } catch {
-    return false;
-  }
-});
-
-const bandcampCovers = bandcampReleases.length > 0
-  ? await batchFetchBandcampCovers(
-      bandcampReleases.map((r) => ({ id: r.id, url: r.url || '' })),
-    )
-  : new Map<string, string>();
-
-const bandcampEntries: MusicEntry[] = releases
-  .filter((item) => bandcampCovers.has(item.id) && !matchedIds.has(item.id))
-  .map((item) => {
-    matchedIds.add(item.id);
-    return {
-      key: item.coverKey || item.id,
-      src: bandcampCovers.get(item.id)!,
-      title: item.title,
-      format: item.format,
-      year: item.year,
-      type: (item.type || 'other').toLowerCase(),
-      url: item.url || allReleasesUrl,
-      id: item.id,
-      sortOrder: item.sortOrder,
-    };
-  });
-
-// Priority 3: local files matching cover_key (lowest image priority)
-const localEntries: MusicEntry[] = Object.entries(images)
-  .map(([path, src]) => {
-    const key = normalizeKey(path);
-    const found = releases.find((r) => r.coverKey === key && !matchedIds.has(r.id));
-    if (!found) return null;
-    matchedIds.add(found.id);
-    return {
-      key,
-      src: typeof src === 'string' ? src : '',
-      title: found.title || key.replace(/\.(jpg|jpeg|png|webp)$/i, ''),
-      format: found.format || '',
-      year: found.year || '',
-      type: (found.type || 'other').toLowerCase(),
-      url: found.url || allReleasesUrl,
-      id: found.id,
-      sortOrder: found.sortOrder,
-    };
-  })
-  .filter((e): e is MusicEntry => e !== null);
-
-// Priority 4: no image — show placeholder
-const noImageEntries: MusicEntry[] = releases
-  .filter((item) => !matchedIds.has(item.id))
-  .map((item) => ({
-    key: item.coverKey || item.id,
-    src: '',
-    title: item.title,
-    format: item.format,
-    year: item.year,
-    type: (item.type || 'other').toLowerCase(),
-    url: item.url || allReleasesUrl,
-    id: item.id,
-    sortOrder: item.sortOrder,
-  }));
-
-const mergedEntries: MusicEntry[] = [...externalEntries, ...bandcampEntries, ...localEntries, ...noImageEntries];
-
-const sortCustom = (a: MusicEntry, b: MusicEntry) =>
-  (Number(b.sortOrder) || 0) - (Number(a.sortOrder) || 0) ||
-  Number(a.id) - Number(b.id) ||
-  Number(b.year) - Number(a.year);
-
-const albums = mergedEntries.filter(item => item.type === 'album').sort(sortCustom);
-const eps = mergedEntries.filter(item => item.type === 'ep').sort(sortCustom);
-const compilations = mergedEntries.filter(item => item.type === 'compilation').sort(sortCustom);
-const singles = mergedEntries.filter(item => item.type === 'single').sort(sortCustom);
 ---
 
 <!DOCTYPE html>
@@ -145,18 +39,20 @@ const singles = mergedEntries.filter(item => item.type === 'single').sort(sortCu
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Baptiste Le Chapelain</title>
   <link rel="dns-prefetch" href="//pub-f04cf0f8494f457e889559aa0b6e57b7.r2.dev">
+  <link rel="dns-prefetch" href="//sheets.googleapis.com">
+  <link rel="dns-prefetch" href="//docs.google.com">
   <link rel="preconnect" href="https://pub-f04cf0f8494f457e889559aa0b6e57b7.r2.dev" crossorigin>
   <link rel="stylesheet" href="/theatre-works.css">
 </head>
 <body>
   <nav class="main-nav">
     <div class="nav-container">
-      <div class="nav-links">
-        <a href="/" class="nav-link home-link" aria-label="theatre"><span class="desktop-label">sound for theatre</span><span class="mobile-label">theatre</span></a>
-        <a href="/music" class="nav-link active">music</a>
-        <a href="/audiovisual" class="nav-link">audiovisual</a>
-        <a href="/contact" class="nav-link">contact</a>
-      </div>
+        <div class="nav-links">
+          <a href="/about" class="nav-link" data-astro-prefetch="load">about</a>
+          <a href="/" class="nav-link home-link" aria-label="theatre" data-astro-prefetch="load"><span class="desktop-label">sound for theatre</span><span class="mobile-label">theatre</span></a>
+          <a href="/music" class="nav-link active" data-astro-prefetch="load">music</a>
+          <a href="/audiovisual" class="nav-link" data-astro-prefetch="load">audiovisual</a>
+        </div>
     </div>
   </nav>
 
@@ -170,11 +66,11 @@ const singles = mergedEntries.filter(item => item.type === 'single').sort(sortCu
       view all releases on discogs →
     </a>
 
-    {albums.length > 0 && (
-      <div class="music-section">
-        <h2 class="section-title">albums</h2>
+    {projects.map((section) => (
+      <div class="music-section" data-project={section.name}>
+        <h2 class="section-title">{section.name}</h2>
         <div class="music-grid">
-            {albums.map(item => (
+          {section.releases.map((item) => (
             <a
               key={item.key}
               class="music-card"
@@ -185,10 +81,9 @@ const singles = mergedEntries.filter(item => item.type === 'single').sort(sortCu
             >
               <div class="music-cover">
                 {item.src ? (
-                  <img src={item.src} alt={item.title} loading="lazy" />
-                ) : (
-                  <div class="music-cover-placeholder">{item.title.charAt(0)}</div>
-                )}
+                  <img src={item.src} alt={item.title} loading="lazy" decoding="async" onerror="this.remove()" />
+                ) : null}
+                <div class={`music-cover-placeholder${item.src ? '' : ' is-visible'}`}>{item.title.charAt(0)}</div>
               </div>
               <div class="music-meta">
                 <div class="music-name">{item.title}</div>
@@ -199,100 +94,20 @@ const singles = mergedEntries.filter(item => item.type === 'single').sort(sortCu
           ))}
         </div>
       </div>
-    )}
+    ))}
 
-    {eps.length > 0 && (
-      <div class="music-section">
-        <h2 class="section-title">eps</h2>
-        <div class="music-grid">
-          {eps.map(item => (
-            <a
-              key={item.key}
-              class="music-card"
-              href={item.url}
-              target="_blank"
-              rel="noreferrer"
-              title={item.title}
-            >
-              <div class="music-cover">
-                {item.src ? (
-                  <img src={item.src} alt={item.title} loading="lazy" />
-                ) : (
-                  <div class="music-cover-placeholder">{item.title.charAt(0)}</div>
-                )}
-              </div>
-              <div class="music-meta">
-                <div class="music-name">{item.title}</div>
-                {item.format && <div class="music-format">{item.format}</div>}
-                {item.year && <div class="music-year">{item.year}</div>}
-              </div>
-            </a>
-          ))}
-        </div>
+    <div class="music-section music-video-section">
+      <h2 class="section-title">videos</h2>
+      <div class="music-video-player">
+        <iframe
+          src="https://www.youtube.com/embed/videoseries?list=PL5hKVoM0x4JpIa3b9__0VqyjnROCsSTIc"
+          title="video clips playlist"
+          loading="lazy"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          allowfullscreen
+        ></iframe>
       </div>
-    )}
-
-    {compilations.length > 0 && (
-      <div class="music-section">
-        <h2 class="section-title">compilations</h2>
-        <div class="music-grid">
-          {compilations.map(item => (
-            <a
-              key={item.key}
-              class="music-card"
-              href={item.url}
-              target="_blank"
-              rel="noreferrer"
-              title={item.title}
-            >
-              <div class="music-cover">
-                {item.src ? (
-                  <img src={item.src} alt={item.title} loading="lazy" />
-                ) : (
-                  <div class="music-cover-placeholder">{item.title.charAt(0)}</div>
-                )}
-              </div>
-              <div class="music-meta">
-                <div class="music-name">{item.title}</div>
-                {item.format && <div class="music-format">{item.format}</div>}
-                {item.year && <div class="music-year">{item.year}</div>}
-              </div>
-            </a>
-          ))}
-        </div>
-      </div>
-    )}
-
-    {singles.length > 0 && (
-      <div class="music-section">
-        <h2 class="section-title">singles</h2>
-        <div class="music-grid">
-          {singles.map(item => (
-            <a
-              key={item.key}
-              class="music-card"
-              href={item.url}
-              target="_blank"
-              rel="noreferrer"
-              title={item.title}
-            >
-              <div class="music-cover">
-                {item.src ? (
-                  <img src={item.src} alt={item.title} loading="lazy" />
-                ) : (
-                  <div class="music-cover-placeholder">{item.title.charAt(0)}</div>
-                )}
-              </div>
-              <div class="music-meta">
-                <div class="music-name">{item.title}</div>
-                {item.format && <div class="music-format">{item.format}</div>}
-                {item.year && <div class="music-year">{item.year}</div>}
-              </div>
-            </a>
-          ))}
-        </div>
-      </div>
-    )}
+    </div>
   </div>
 </body>
 </html>

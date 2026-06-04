@@ -115,26 +115,42 @@ export async function scrapeAndUploadBandcampCover(
 
 export async function batchFetchBandcampCovers(
   releases: Array<{ id: string; url: string }>,
-  timeoutMs = 10000,
+  timeoutMs = 4000,
 ): Promise<Map<string, string>> {
   const results = new Map<string, string>();
 
   const bandcampReleases = releases.filter((r) => isBandcampUrl(r.url));
   if (bandcampReleases.length === 0) return results;
 
-  const fetched = await Promise.all(
+  // Fast path: covers already on R2 (parallel HEAD only — no Bandcamp HTTP).
+  await Promise.all(
     bandcampReleases.map(async (r) => {
-      try {
-        const cover = await scrapeAndUploadBandcampCover(r.id, r.url, timeoutMs);
-        return { id: r.id, cover };
-      } catch {
-        return { id: r.id, cover: null };
-      }
+      const r2Key = musicCoverR2Key(r.id);
+      const r2Url = musicCoverR2Url(r.id);
+      if (await headR2Object(r2Key)) results.set(r.id, r2Url);
     }),
   );
 
-  for (const { id, cover } of fetched) {
-    if (cover) results.set(id, cover);
+  const scrapeOnRequest = process.env.MUSIC_FETCH_BANDCAMP === '1';
+  if (!scrapeOnRequest) return results;
+
+  const remaining = bandcampReleases.filter((r) => !results.has(r.id));
+  const concurrency = 2;
+  for (let i = 0; i < remaining.length; i += concurrency) {
+    const chunk = remaining.slice(i, i + concurrency);
+    const fetched = await Promise.all(
+      chunk.map(async (r) => {
+        try {
+          const cover = await scrapeAndUploadBandcampCover(r.id, r.url, timeoutMs);
+          return { id: r.id, cover };
+        } catch {
+          return { id: r.id, cover: null };
+        }
+      }),
+    );
+    for (const { id, cover } of fetched) {
+      if (cover) results.set(id, cover);
+    }
   }
 
   return results;

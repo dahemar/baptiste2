@@ -7,10 +7,39 @@ interface Credit {
   name: string;
 }
 
+const SYNOPSIS_ROLE_RE = /^(synopsis|description|short[\s_-]?description|teaser|summary)$/i;
+const DIRECTION_ROLE_RE = /^direction$/i;
+
+function partitionCredits(credits: Credit[], synopsisProp?: string) {
+  let synopsis = synopsisProp?.trim() || '';
+  const direction: Credit[] = [];
+  const other: Credit[] = [];
+
+  for (const credit of credits) {
+    const role = credit.role.trim();
+    if (SYNOPSIS_ROLE_RE.test(role)) {
+      if (!synopsis) synopsis = credit.name.trim();
+      continue;
+    }
+    if (DIRECTION_ROLE_RE.test(role)) {
+      direction.push(credit);
+      continue;
+    }
+    other.push(credit);
+  }
+
+  return {
+    synopsis: synopsis || undefined,
+    direction,
+    other,
+  };
+}
+
 interface CreditsPanelProps {
   isVisible: boolean;
   title: string;
   credits?: Credit[];
+  synopsis?: string;
   onPrevWork?: (() => void) | undefined;
   onNextWork?: (() => void) | undefined;
   videoRef?: React.RefObject<HTMLVideoElement | null>;
@@ -22,6 +51,7 @@ export default function CreditsPanel({
   isVisible, 
   title, 
   credits = [],
+  synopsis,
   onPrevWork,
   onNextWork,
   videoRef,
@@ -66,6 +96,8 @@ export default function CreditsPanel({
     return null;
   }
 
+  const { synopsis: description, direction, other } = partitionCredits(credits, synopsis);
+
   const handleWheel = (e: React.WheelEvent) => {
     e.stopPropagation();
   };
@@ -80,16 +112,33 @@ export default function CreditsPanel({
     >
       <div ref={scrollRegionRef} className="credits-scroll-region">
         <div className="credits-content">
-          <div className="credit-line">
-            <span className="credit-title">{title}</span>
-          </div>
+          <header className="credits-header">
+            <h2 className="credit-title">{title}</h2>
+            {direction.map((credit, index) => (
+              <div key={`dir-${index}`} className="credit-line credit-line--meta">
+                <span className="credit-role">{credit.role}:</span>
+                <span className="credit-name">{credit.name}</span>
+              </div>
+            ))}
+          </header>
 
-          {credits && credits.map((credit, index) => (
-            <div key={index} className="credit-line">
-              <span className="credit-role">{credit.role}:</span>
-              <span className="credit-name">{credit.name}</span>
-            </div>
-          ))}
+          {description && (
+            <section className="credits-lead" aria-label="Description">
+              <p className="credit-synopsis">{description}</p>
+            </section>
+          )}
+
+          {other.length > 0 && (
+            <section className="credits-details" aria-label="Credits">
+              {description && <hr className="credits-divider" />}
+              {other.map((credit, index) => (
+                <div key={`credit-${index}`} className="credit-line">
+                  <span className="credit-role">{credit.role}:</span>
+                  <span className="credit-name">{credit.name}</span>
+                </div>
+              ))}
+            </section>
+          )}
         </div>
       </div>
 

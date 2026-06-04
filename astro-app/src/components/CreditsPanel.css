@@ -1,20 +1,21 @@
 .credits-panel {
+  --credits-panel-width: 20%;
   position: fixed;
-  top: 80px;
+  top: var(--nav-height, 80px);
   right: 0;
-  width: 20%;
-  height: calc(100vh - 80px);
-  height: calc(100dvh - 80px);
-  background-color: rgba(42, 42, 42, 0.85);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  color: #e0e0e0;
+  width: var(--credits-panel-width);
+  height: calc(100vh - var(--nav-height, 80px));
+  height: calc(100dvh - var(--nav-height, 80px));
+  background-color: rgba(18, 18, 18, 0.92);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  color: #d8d8d8;
   padding: 0;
   overflow: hidden;
   z-index: 100;
-  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
   transform: translateX(0);
-  transition: none;
+  text-transform: none;
 }
 
 .credits-scroll-region {
@@ -23,14 +24,14 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
-  padding: 2rem 2rem calc(11.5rem + 5px);
+  padding: 1.65rem 1.5rem calc(10rem + 5px);
   box-sizing: border-box;
 }
 
 .credits-panel .credits-vumeter {
   position: absolute;
-  right: 2rem;
-  bottom: 2rem;
+  right: 1.5rem;
+  bottom: 1.5rem;
   display: flex;
   justify-content: flex-end;
   gap: 0.5rem;
@@ -51,7 +52,28 @@
 .credits-content {
   position: relative;
   z-index: 1;
-  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.credits-header {
+  margin-bottom: 0.85rem;
+}
+
+.credits-lead {
+  margin-bottom: 0;
+}
+
+.credits-details {
+  margin-top: 0;
+}
+
+.credits-divider {
+  border: 0;
+  height: 1px;
+  margin: 1rem 0 0.85rem;
+  background: rgba(255, 255, 255, 0.12);
 }
 
 .credits-bottom-fade {
@@ -59,8 +81,13 @@
   left: 0;
   right: 0;
   bottom: 0;
-  height: calc(11.5rem + 5px);
-  background: linear-gradient(to bottom, rgba(42, 42, 42, 0) 0%, rgba(42, 42, 42, 0.92) 34%, rgba(42, 42, 42, 0.995) 56%, rgba(42, 42, 42, 1) 68%, rgba(42, 42, 42, 1) 100%);
+  height: calc(10rem + 5px);
+  background: linear-gradient(
+    to bottom,
+    rgba(18, 18, 18, 0) 0%,
+    rgba(18, 18, 18, 0.9) 40%,
+    rgba(18, 18, 18, 1) 70%
+  );
   pointer-events: none;
   z-index: 2;
   opacity: 1;
@@ -72,22 +99,42 @@
 }
 
 .credit-line {
-  margin-bottom: 0.5rem;
-  line-height: 1.3;
+  margin: 0 0 0.45rem;
+  line-height: 1.45;
+}
+
+.credit-line--meta {
+  margin-bottom: 0.35rem;
+}
+
+.credit-line:last-child {
+  margin-bottom: 0;
 }
 
 .credit-title {
-  font-weight: 500;
-  letter-spacing: -0.01em;
-  font-size: 0.9rem;
-  color: #ffffff;
+  margin: 0 0 0.55rem;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  font-size: 0.95rem;
+  line-height: 1.35;
+  color: #f2f2f2;
+  text-transform: none;
+}
+
+.credit-synopsis {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 300;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.55);
+  text-transform: none;
 }
 
 .credits-project-nav {
   position: absolute;
-  bottom: 2rem;
-  left: 2rem;
-  right: 2rem;
+  bottom: 1.5rem;
+  left: 1.5rem;
+  right: 1.5rem;
   display: none;
   justify-content: space-between;
   gap: 1rem;
@@ -98,17 +145,18 @@
   border: none;
   border-radius: 0;
   padding: 0.5rem 0;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   line-height: 1;
   height: auto;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0.4rem;
-  color: #999;
+  color: #888;
   cursor: pointer;
   transition: color 0.2s ease;
   letter-spacing: 0.02em;
+  text-transform: none;
 }
 
 .project-nav:hover {
@@ -126,18 +174,19 @@
 
 .credit-role {
   font-weight: 300;
-  color: #888;
-  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 0.78rem;
+  text-transform: none;
 }
 
 .credit-name {
   font-weight: 400;
-  color: #e0e0e0;
-  margin-left: 0.5rem;
-  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.82);
+  margin-left: 0.35rem;
+  font-size: 0.78rem;
+  text-transform: none;
 }
 
-/* Custom scrollbar for credits */
 .credits-scroll-region::-webkit-scrollbar {
   width: 4px;
 }
@@ -147,12 +196,12 @@
 }
 
 .credits-scroll-region::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.18);
   border-radius: 2px;
 }
 
 .credits-scroll-region::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.32);
 }
 
 @media (max-width: 768px) {
@@ -161,7 +210,7 @@
     width: 100%;
     flex: 1;
     overflow: hidden;
-    background-color: #2a2a2a;
+    background-color: #222;
     padding: 0;
     box-sizing: border-box;
   }
@@ -184,18 +233,16 @@
     -webkit-overflow-scrolling: touch;
   }
 
-  /* When credits are visible in the mobile fixed player, lift the panel 4px
-     so it overlaps the video slightly (removes small gap/stripe) */
   .mobile-fixed-player .credits-panel.visible {
-    margin-top: -84px; /* subir créditos 76px + 4px extra (pedido móvil) */
+    margin-top: -84px;
     z-index: 3;
   }
 
   .mobile-fixed-player .credits-bottom-fade {
     display: block;
     bottom: 0;
-    height: 82px; /* aumentado 10px para que el degradado empiece más arriba */
-    background: linear-gradient(to bottom, rgba(42, 42, 42, 0), rgba(42, 42, 42, 0.96));
+    height: 82px;
+    background: linear-gradient(to bottom, rgba(34, 34, 34, 0), rgba(34, 34, 34, 0.96));
     pointer-events: none;
     z-index: 2;
     opacity: 0;
@@ -214,14 +261,11 @@
   }
 
   .credits-content {
-    padding: 1rem;
+    padding: 0;
   }
 
   .credits-panel .credit-title {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.75rem;
+    display: block;
     width: 100%;
   }
 
@@ -240,13 +284,6 @@
   }
 
   .credit-line {
-    margin-bottom: 0.3rem;
-  }
-
-  .credit-title {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.75rem;
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.35rem;
   }
 }

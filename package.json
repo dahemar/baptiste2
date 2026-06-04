@@ -12,7 +12,8 @@
     "r2:check": "scripts/check-r2-setup.sh",
     "r2:migrate": "scripts/migrate-to-r2.sh",
     "r2:update-csv": "node scripts/update-csv-for-r2.js",
-    "r2:verify": "node scripts/verify-r2-migration.js"
+    "r2:verify": "node scripts/verify-r2-migration.js",
+    "sheets:sync-content": "node scripts/sync_content_tabs_to_sheets.js"
   }
 }
 

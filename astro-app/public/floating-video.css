@@ -1,0 +1,140 @@
+/* Cross-browser floating video windows (Firefox-style pop-out) */
+
+.video-popout-button {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 18;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease, background 0.2s ease, transform 0.15s ease;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.video-popout-button:hover {
+  background: rgba(0, 0, 0, 0.75);
+  transform: scale(1.05);
+}
+
+.video-popout-button:focus {
+  outline: none;
+}
+
+.video-popout-button:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.85);
+  outline-offset: 2px;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.scene-item:hover .video-popout-button,
+.scene-item.active .video-popout-button,
+.scene-item.hovered .video-popout-button,
+.av-media:hover .video-popout-button,
+.av-media.av-playing .video-popout-button {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.floating-video-window {
+  position: fixed;
+  display: flex;
+  flex-direction: column;
+  border-radius: 4px;
+  overflow: hidden;
+  background: #0a0a0a;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow:
+    0 18px 48px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(255, 255, 255, 0.06) inset;
+  touch-action: none;
+  user-select: none;
+}
+
+.floating-video-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 8px 0 12px;
+  background: rgba(255, 255, 255, 0.06);
+  cursor: grab;
+  flex-shrink: 0;
+}
+
+.floating-video-toolbar:active {
+  cursor: grabbing;
+}
+
+.floating-video-title {
+  flex: 1;
+  min-width: 0;
+  font: 12px/1.2 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  color: rgba(255, 255, 255, 0.88);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.floating-video-close {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+
+.floating-video-close:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.floating-video-body {
+  flex: 1;
+  min-height: 0;
+  background: #000;
+  position: relative;
+}
+
+.floating-video-element {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+  background: #000;
+}
+
+.floating-video-resize {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 18px;
+  height: 18px;
+  cursor: nwse-resize;
+  z-index: 2;
+  background: linear-gradient(135deg, transparent 50%, rgba(255, 255, 255, 0.35) 50%);
+}
+
+@media (max-width: 768px) {
+  .video-popout-button {
+    display: none !important;
+  }
+}

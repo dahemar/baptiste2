@@ -18,6 +18,14 @@ export async function POST({ request }: any) {
     if (typeof gsm.clearMemoryCache === 'function') {
       try { gsm.clearMemoryCache(); } catch { /* ignore */ }
     }
+    try {
+      const { clearSectionMemoryCache } = await import('../../../utils/sectionContentManager');
+      clearSectionMemoryCache();
+    } catch { /* ignore */ }
+    try {
+      const { clearMusicPageCache } = await import('../../../utils/musicPageData');
+      clearMusicPageCache();
+    } catch { /* ignore */ }
     // Force reload from Google Sheets and return a small summary
     const fetched = await gsm.loadTheatreWorksData({ force: true });
     const works = Array.isArray(fetched) ? fetched.length : 0;

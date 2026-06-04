@@ -1,0 +1,179 @@
+/* About page — consistent with music / audiovisual content pages */
+
+.about-page {
+  padding: 2rem;
+  max-width: 900px;
+  margin: 0 auto;
+  min-height: 100vh;
+  padding-top: calc(var(--nav-height) + 2rem);
+  text-transform: none !important;
+  color: #ededed;
+}
+
+.about-lang-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-bottom: 2.25rem;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 0.85rem;
+  line-height: 1;
+  text-transform: lowercase;
+  user-select: none;
+}
+
+.about-lang-btn {
+  appearance: none;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  color: rgba(255, 255, 255, 0.58);
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  text-transform: lowercase;
+  transition: color 0.2s ease;
+}
+
+.about-lang-btn:hover,
+.about-lang-btn.active {
+  color: #ffffff;
+}
+
+.about-lang-btn.active {
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+}
+
+.about-lang-btn:focus {
+  outline: none;
+}
+
+.about-lang-btn:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.75);
+  outline-offset: 3px;
+}
+
+.about-lang-sep {
+  color: rgba(255, 255, 255, 0.28);
+  pointer-events: none;
+}
+
+.about-section {
+  margin-bottom: 2.5rem;
+}
+
+.about-section-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #ffffff;
+  margin: 0 0 1rem 0;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  text-transform: none !important;
+  letter-spacing: -0.02em;
+}
+
+.about-lead {
+  font-size: 1rem;
+  font-weight: 300;
+  line-height: 1.7;
+  color: #ffffff;
+  margin: 0 0 1.25rem 0;
+  letter-spacing: -0.01em;
+}
+
+.about-text,
+.about-bio p {
+  font-size: 0.95rem;
+  font-weight: 400;
+  line-height: 1.65;
+  color: rgba(255, 255, 255, 0.78);
+  margin: 1rem 0;
+}
+
+.about-bio p:last-child,
+.about-bio p:last-of-type {
+  margin-bottom: 0;
+}
+
+.about-image {
+  margin: 1.75rem 0 0.25rem;
+  max-width: 100%;
+}
+
+.about-image img {
+  display: block;
+  width: 100%;
+  max-width: 420px;
+  border-radius: 4px;
+  opacity: 0.92;
+}
+
+.about-divider {
+  height: 1px;
+  margin: 2rem 0;
+  border: none;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.about-contact-links {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  align-items: flex-start;
+}
+
+.about-contact-link {
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.95rem;
+  font-weight: 400;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  transition: color 0.2s ease;
+}
+
+.about-contact-link:hover {
+  color: #ffffff;
+}
+
+.about-page [data-lang-text],
+.about-page [data-lang-block] {
+  display: none;
+}
+
+html[data-about-lang='en'] .about-page [data-lang-text='en'],
+html[data-about-lang='fr'] .about-page [data-lang-text='fr'] {
+  display: inline;
+}
+
+html[data-about-lang='en'] .about-page [data-lang-block='en'],
+html[data-about-lang='fr'] .about-page [data-lang-block='fr'] {
+  display: block;
+}
+
+@media (min-width: 1100px) {
+  .about-page {
+    max-width: 900px;
+  }
+}
+
+@media (max-width: 768px) {
+  .about-page {
+    padding: 1rem;
+    padding-top: calc(var(--nav-height) + 1rem);
+  }
+
+  .about-section {
+    margin-bottom: 2rem;
+  }
+
+  .about-divider {
+    margin: 1.5rem 0;
+  }
+
+  .about-image img {
+    max-width: 100%;
+    border-radius: 0;
+  }
+}

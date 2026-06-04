@@ -21,6 +21,7 @@ try {
   <link rel="dns-prefetch" href="//pub-f04cf0f8494f457e889559aa0b6e57b7.r2.dev">
   <link rel="preconnect" href="https://pub-f04cf0f8494f457e889559aa0b6e57b7.r2.dev" crossorigin>
   <link rel="stylesheet" href="/theatre-works.css">
+  <link rel="stylesheet" href="/floating-video.css">
   <style>
     @media (max-width: 768px) {
       .av-media, .av-media img, .av-media video {
@@ -33,12 +34,12 @@ try {
 <body>
   <nav class="main-nav">
     <div class="nav-container">
-      <div class="nav-links">
-        <a href="/" class="nav-link home-link" aria-label="theatre"><span class="desktop-label">sound for theatre</span><span class="mobile-label">theatre</span></a>
-        <a href="/music" class="nav-link">music</a>
-        <a href="/audiovisual" class="nav-link active">audiovisual</a>
-        <a href="/contact" class="nav-link">contact</a>
-      </div>
+        <div class="nav-links">
+          <a href="/about" class="nav-link" data-astro-prefetch="load">about</a>
+          <a href="/" class="nav-link home-link" aria-label="theatre" data-astro-prefetch="load"><span class="desktop-label">sound for theatre</span><span class="mobile-label">theatre</span></a>
+          <a href="/music" class="nav-link" data-astro-prefetch="load">music</a>
+          <a href="/audiovisual" class="nav-link active" data-astro-prefetch="load">audiovisual</a>
+        </div>
     </div>
   </nav>
 
@@ -146,6 +147,7 @@ try {
       })}
     </div>
   </div>
+  <script src="/floating-video.js" defer></script>
 </body>
 </html>
 
