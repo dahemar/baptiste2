@@ -131,8 +131,16 @@ export default function VideoGrid({ works, audioFiles = [] }: VideoGridProps) {
   const mobileFixedVideoRef = useRef<HTMLVideoElement | null>(null);
   const [showSceneArrows, setShowSceneArrows] = useState(false);
   const [mobilePosterOverlay, setMobilePosterOverlay] = useState<{ visible: boolean; url?: string }>({ visible: false });
-  const [generatedThumbnails, setGeneratedThumbnails] = useState<Record<string, string>>({});
+  const SESSION_KEY = 'theatre-posters';
+  const loadSessionPosters = (): Record<string, string> => {
+    try { const v = sessionStorage.getItem(SESSION_KEY); return v ? JSON.parse(v) : {}; } catch { return {}; }
+  };
+  const saveSessionPosters = (posters: Record<string, string>) => {
+    try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(posters)); } catch { /* ignore */ }
+  };
+  const [generatedThumbnails, setGeneratedThumbnails] = useState<Record<string, string>>(() => loadSessionPosters());
   const [failedR2Posters, setFailedR2Posters] = useState<Set<string>>(() => new Set());
+  const failedR2Prefixes = useRef<Set<string>>(new Set());
   const generatedThumbsRef = useRef<Record<string, string>>({});
   const failedThumbsRef = useRef<Set<string>>(new Set());
   const inFlightThumbsRef = useRef<Set<string>>(new Set());
@@ -191,6 +199,9 @@ export default function VideoGrid({ works, audioFiles = [] }: VideoGridProps) {
     }
     const r2Poster = String(scene?.thumbnail || '').trim();
     if (r2Poster && !failedR2Posters.has(r2Poster)) {
+      // Skip if this path prefix already failed for another scene
+      const prefix = r2Poster.substring(0, r2Poster.lastIndexOf('/'));
+      if (prefix && failedR2Prefixes.current.has(prefix)) return undefined;
       return r2Poster;
     }
     return undefined;
@@ -205,6 +216,9 @@ export default function VideoGrid({ works, audioFiles = [] }: VideoGridProps) {
       next.add(r2Poster);
       return next;
     });
+    // Also mark the path prefix as failed so adjacent scenes skip the R2 .jpg round-trip
+    const prefix = r2Poster.substring(0, r2Poster.lastIndexOf('/'));
+    if (prefix) failedR2Prefixes.current.add(prefix);
   }, []);
 
   useEffect(() => {
@@ -493,7 +507,9 @@ export default function VideoGrid({ works, audioFiles = [] }: VideoGridProps) {
           if (dataUrl) {
             setGeneratedThumbnails((prev) => {
               if (prev[task.key]) return prev;
-              return { ...prev, [task.key]: dataUrl };
+              const next = { ...prev, [task.key]: dataUrl };
+              saveSessionPosters(next);
+              return next;
             });
           } else {
             failedThumbsRef.current.add(task.key);
@@ -1830,6 +1846,8 @@ export default function VideoGrid({ works, audioFiles = [] }: VideoGridProps) {
                                 className="mobile-video scene-poster-image"
                                 src={poster}
                                 alt={work.title}
+                                width={360}
+                                height={225}
                                 loading={workIdx < 2 ? 'eager' : 'lazy'}
                                 decoding="async"
                                 onError={() => handleScenePosterError(firstScene)}
@@ -1926,10 +1944,12 @@ export default function VideoGrid({ works, audioFiles = [] }: VideoGridProps) {
                         <>
                           {!isActiveScene && (
                             posterUrl ? (
-                              <img
+                               <img
                                 className="scene-poster-image"
                                 src={posterUrl}
                                 alt=""
+                                width={360}
+                                height={225}
                                 decoding="async"
                                 loading="lazy"
                                 onError={() => handleScenePosterError(scene)}
