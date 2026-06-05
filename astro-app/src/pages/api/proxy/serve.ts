@@ -30,10 +30,6 @@ async function proxyFetch(target: string, incomingRange?: string | null) {
   return res;
 }
 
-function isProduction() {
-  return !import.meta.env.DEV;
-}
-
 const GLOBAL_KEY = '__dev_proxy_register_map__' as const;
 const registry: Map<string, string> = (global as any)[GLOBAL_KEY] || new Map();
 
