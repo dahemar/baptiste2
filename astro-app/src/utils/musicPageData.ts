@@ -99,7 +99,7 @@ function buildEntries(
       matchedIds.add(item.id);
       return {
         key: item.coverKey || item.id,
-        src: musicCoverR2Url(item.id),
+        src: musicCoverR2Url(item.coverKey || item.id),
         title: item.title,
         format: item.format,
         year: item.year,
