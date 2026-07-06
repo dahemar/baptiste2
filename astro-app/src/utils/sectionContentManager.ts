@@ -367,8 +367,8 @@ export async function loadMusicData(): Promise<{ allReleasesUrl: string; release
   });
 
   const releases: MusicRelease[] = rows
-    .map((row) => ({
-      id: rowValue(row, ['id', 'ID']),
+    .map((row, index) => ({
+      id: String(index + 1),
       title: rowValue(row, ['title', 'Title']),
       format: rowValue(row, ['format', 'Format']),
       year: rowValue(row, ['year', 'Year']),
