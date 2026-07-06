@@ -389,6 +389,31 @@ export async function loadMusicData(): Promise<{ allReleasesUrl: string; release
   return { allReleasesUrl, releases };
 }
 
+export interface MusicVideo {
+  sortOrder: string;
+  url: string;
+}
+
+export async function loadMusicVideosData(): Promise<MusicVideo[]> {
+  const envRange = process.env.MUSIC_VIDEOS_SHEET_RANGE;
+  const rows = await loadSectionRows({
+    cacheKey: 'music-videos',
+    rangeNames: (envRange ? [envRange] : ['music_videos']),
+    gvizTabName: 'music_videos',
+    csvUrlEnvVar: 'MUSIC_VIDEOS_CSV_URL',
+    localFileName: 'music_videos.csv',
+    preferLocalCsv: true,
+  });
+
+  return rows
+    .map((row) => ({
+      sortOrder: rowValue(row, ['sort_order', 'order', 'position']),
+      url: rowValue(row, ['url', 'link', 'URL', 'video_url']),
+    }))
+    .filter((v) => v.url.length > 0)
+    .sort((a, b) => (Number(a.sortOrder) || 0) - (Number(b.sortOrder) || 0));
+}
+
 export async function loadAudiovisualData(): Promise<AudiovisualProject[]> {
   const envRange = process.env.AUDIOVISUAL_SHEET_RANGE;
   const rows = await loadSectionRows({

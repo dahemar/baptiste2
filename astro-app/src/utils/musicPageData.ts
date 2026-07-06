@@ -1,8 +1,10 @@
 import {
   loadMusicData,
+  loadMusicVideosData,
   MUSIC_PROJECT_ORDER,
   resolveMusicProject,
   type MusicRelease,
+  type MusicVideo,
 } from './sectionContentManager';
 import { musicCoverR2Url } from './bandcampScraper';
 
@@ -36,6 +38,7 @@ export interface MusicProjectSection {
 export interface MusicPageModel {
   allReleasesUrl: string;
   projects: MusicProjectSection[];
+  videos: MusicVideo[];
 }
 
 type MusicPageCacheEntry = { data: MusicPageModel; expiresAt: number };
@@ -188,11 +191,13 @@ export async function loadMusicPageModel(
   }
 
   const { allReleasesUrl, releases } = await loadMusicData();
+  const videos = await loadMusicVideosData();
   const mergedEntries = buildEntries(releases, allReleasesUrl, localImages);
 
   const model: MusicPageModel = {
     allReleasesUrl,
     projects: groupByProject(mergedEntries, releases),
+    videos,
   };
 
   musicPageCache = { data: model, expiresAt: Date.now() + MUSIC_PAGE_CACHE_TTL_MS };

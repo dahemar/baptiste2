@@ -22,11 +22,13 @@ for (const [assetPath, src] of Object.entries(images)) {
 
 let allReleasesUrl = 'https://www.discogs.com/fr/artist/5751087-Apulati-Bien?superFilter=Releases';
 let projects = [];
+let videos = [];
 
 try {
   const model = await loadMusicPageModel(localImages);
   allReleasesUrl = model.allReleasesUrl || allReleasesUrl;
   projects = model.projects;
+  videos = model.videos || [];
 } catch {
   projects = [];
 }
@@ -96,18 +98,30 @@ try {
       </div>
     ))}
 
-    <div class="music-section music-video-section">
-      <h2 class="section-title">videos</h2>
-      <div class="music-video-player">
-        <iframe
-          src="https://www.youtube.com/embed/videoseries?list=PL5hKVoM0x4JpIa3b9__0VqyjnROCsSTIc"
-          title="video clips playlist"
-          loading="lazy"
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-          allowfullscreen
-        ></iframe>
+    {videos.length > 0 && (
+      <div class="music-section music-video-section">
+        <h2 class="section-title">videos</h2>
+        {videos.map((v) => {
+          const url = v.url.trim();
+          let embedSrc = url;
+          const ytId = url.match(/(?:embed\/|watch\?v=|\/v\/|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+          const ytList = url.match(/[?&]list=([a-zA-Z0-9_-]+)/);
+          if (ytList) {
+            embedSrc = `https://www.youtube.com/embed/videoseries?list=${ytList[1]}`;
+          } else if (ytId) {
+            embedSrc = `https://www.youtube.com/embed/${ytId[1]}`;
+          } else {
+            const vimeo = url.match(/vimeo\.com\/(\d+)/);
+            if (vimeo) embedSrc = `https://player.vimeo.com/video/${vimeo[1]}`;
+          }
+          return (
+            <div class="music-video-player">
+              <iframe src={embedSrc} loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+            </div>
+          );
+        })}
       </div>
-    </div>
+    )}
   </div>
 </body>
 </html>
