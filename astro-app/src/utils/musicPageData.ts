@@ -55,7 +55,7 @@ function isBandcampUrl(url: string): boolean {
 
 function sortCustom(a: MusicEntry, b: MusicEntry): number {
   return (
-    (Number(b.sortOrder) || 0) - (Number(a.sortOrder) || 0) ||
+    (Number(a.sortOrder) || 0) - (Number(b.sortOrder) || 0) ||
     a.title.localeCompare(b.title) ||
     Number(b.year) - Number(a.year)
   );
