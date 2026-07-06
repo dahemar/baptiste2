@@ -48,7 +48,8 @@ async function downloadImage(url: string, timeoutMs = 10000): Promise<Buffer | n
 }
 
 export function musicCoverR2Key(releaseId: string): string {
-  return `music-covers/${releaseId}.jpg`;
+  const clean = releaseId.replace(/\.(jpg|jpeg|png|webp)$/i, '');
+  return `music-covers/${clean}.jpg`;
 }
 
 /** Public R2 URL for a music cover key */
